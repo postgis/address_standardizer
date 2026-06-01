@@ -1,13 +1,15 @@
-# address_standardizer 3.7.0dev
+# address_standardizer
+
+## Version 3.7
 
 2026/xx/xx
 
-## Breaking Changes
+### Breaking Changes
 
 - #6053, `address_standardizer` moved out of the main PostGIS tree into its own
   repository (Paul Ramsey)
 
-## Bug Fixes
+### Bug Fixes
 
 - #1599, `parse_address()` and `normalize_address()` now canonicalize trailing
   country tokens to ISO 3166-1 alpha-2 codes and expose country on normalized
@@ -22,3 +24,4 @@
   (Maksim Korotkov)
 - Add `PG_MODULE_MAGIC` for PostgreSQL < 18 and `PG_MODULE_MAGIC_EXT` for
   PostgreSQL >= 18 builds (Regina Obe, Paul Ramsey)
+

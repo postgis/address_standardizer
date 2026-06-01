@@ -1,0 +1,61 @@
+#
+# Only run on tag
+# Only release of the tag name is identical to the full version
+#
+
+name: 'Release'
+
+on:
+  push:
+    tags:
+      - '*.*'
+
+jobs:
+  release:
+    name: 'Release on Tag'
+    runs-on: ubuntu-latest
+
+    # Only run release on central repo
+    if: github.repository == 'postgis/address_standardizer'
+    steps:
+
+    - uses: actions/checkout@v6
+
+    - name: Get tag
+      id: tag
+      uses: dawidd6/action-get-tag@v1
+
+    - name: 'Read Version'
+      id: version
+      run: |
+        pwd
+        AS_VERSION=`grep default $(EXTENSION).control | cut -f2 -d'=' | tr -d "' "`
+        echo AS_VERSION $AS_VERSION
+        echo "::set-output name=asversion::${AS_VERSION}"
+
+    - name: 'Create Release Notes'
+      id: notes
+      run: |
+        pwd
+        perl tools/releasenotes.pl NEWS.md > release.md
+        echo "::set-output name=asnotes::./release.md"
+
+    - name: 'Bundle & Check Package'
+      id: bundle
+      run: |
+        pwd
+        set -e
+        make && make dist
+
+    - name: Create Release
+      if: ${{ steps.tag.outputs.tag == steps.version.outputs.asversion }}
+      id: create_release
+      uses: softprops/action-gh-release@v2
+      with:
+        body_path: ${{ steps.notes.outputs.asnotes }}
+        name: Release ${{ steps.version.outputs.asversion }}
+        prerelease: false
+        files: |
+          ./address_standardizer-*.tar.gz
+
+
