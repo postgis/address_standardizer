@@ -18,6 +18,8 @@ PG_CONFIG = pg_config
 MODULE_big = $(EXTENSION)
 DATA = $(DATA_EXTENSION).control
 
+DISTNAME = $(EXTENSION)-$(AS_VERSION)
+
 SRCS = $(wildcard src/*.c)
 OBJS = $(SRCS:.c=.o)
 
@@ -71,6 +73,12 @@ data/$(DATA_EXTENSION)--$(AS_VERSION).sql: data/$(DATA_EXTENSION)_core.sql | dat
 
 data/$(DATA_EXTENSION)--ANY--$(AS_VERSION).sql: data/$(DATA_EXTENSION)_core.sql | data
 	cat $^ > $@
+
+
+.PHONY: dist
+dist:
+	git archive --prefix=$(DISTNAME)/ HEAD | gzip > $(DISTNAME).tar.gz
+
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
