@@ -29,7 +29,7 @@ jobs:
       id: version
       run: |
         pwd
-        AS_VERSION=`grep default $(EXTENSION).control | cut -f2 -d'=' | tr -d "' "`
+        AS_VERSION=$(grep default address_standardizer.control | cut -f2 -d'=' | tr -d "' ")
         echo AS_VERSION $AS_VERSION
         echo "::set-output name=asversion::${AS_VERSION}"
 
@@ -40,12 +40,20 @@ jobs:
         perl tools/releasenotes.pl NEWS.md > release.md
         echo "::set-output name=asnotes::./release.md"
 
+    - name: Install postgresql-server-dev
+      id: installpg
+      run: |
+        PG_VERSION=$(pg_config --version | awk '{print $2}' | cut -d. -f1)
+        echo "Detected PostgreSQL major version: $PG_VERSION"
+        sudo apt-get update
+        sudo apt-get install -y postgresql-server-dev-$PG_VERSION
+
     - name: 'Bundle & Check Package'
       id: bundle
       run: |
         pwd
         set -e
-        make && make dist
+        make with_llvm=no && make dist
 
     - name: Create Release
       if: ${{ steps.tag.outputs.tag == steps.version.outputs.asversion }}
