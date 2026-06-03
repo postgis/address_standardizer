@@ -75,10 +75,15 @@ data/$(DATA_EXTENSION)--ANY--$(AS_VERSION).sql: data/$(DATA_EXTENSION)_core.sql 
 	cat $^ > $@
 
 
-.PHONY: dist
+.PHONY: dist check
 dist:
 	git archive --prefix=$(DISTNAME)/ HEAD | gzip > $(DISTNAME).tar.gz
 
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
+
+
+# override pgxs check target and perform in-place extension check
+check:
+	PG_CONFIG="$(PG_CONFIG)" MAKE="$(MAKE)" sh tools/run-check.sh
