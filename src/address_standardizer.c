@@ -664,8 +664,12 @@ debug_standardize_address(PG_FUNCTION_ARGS)
 
 		appendStringInfoString(result, ", \"rules\":[");
 		rule_sql = makeStringInfo();
-		appendStringInfo(
-		    rule_sql, "SELECT id, rule FROM %s WHERE rule LIKE $1::varchar", quote_identifier(rultab));
+		{
+			char *safe_rultab = resolve_and_quote_tabname(rultab);
+			if (!safe_rultab)
+				elog(ERROR, "%s: rules table \"%s\" does not exist", __func__, rultab);
+			appendStringInfo(rule_sql, "SELECT id, rule FROM %s WHERE rule LIKE $1::varchar", safe_rultab);
+		}
 
 		spi_connect_result = SPI_connect();
 		if (spi_connect_result != SPI_OK_CONNECT)
