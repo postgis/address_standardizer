@@ -24,7 +24,7 @@ jobs:
     steps:
 
     - name: 'Check Out'
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: 'Raise Priority for apt.postgresql.org'
       run: |
