@@ -23,7 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #undef DEBUG
 //#define DEBUG 1
 
-#include <stdlib.h>
+#include "postgres.h"
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -399,24 +399,23 @@ void std_free(STANDARDIZER *std)
 void stdaddr_free(STDADDR *stdaddr)
 {
     if (!stdaddr) return;
-    if (stdaddr->building)   free(stdaddr->building);
-    if (stdaddr->house_num)  free(stdaddr->house_num);
-    if (stdaddr->predir)     free(stdaddr->predir);
-    if (stdaddr->qual)       free(stdaddr->qual);
-    if (stdaddr->pretype)    free(stdaddr->pretype);
-    if (stdaddr->name)       free(stdaddr->name);
-    if (stdaddr->suftype)    free(stdaddr->suftype);
-    if (stdaddr->sufdir)     free(stdaddr->sufdir);
-    if (stdaddr->ruralroute) free(stdaddr->ruralroute);
-    if (stdaddr->extra)      free(stdaddr->extra);
-    if (stdaddr->city)       free(stdaddr->city);
-    if (stdaddr->state)      free(stdaddr->state);
-    if (stdaddr->country)    free(stdaddr->country);
-    if (stdaddr->postcode)   free(stdaddr->postcode);
-    if (stdaddr->box)        free(stdaddr->box);
-    if (stdaddr->unit)       free(stdaddr->unit);
-    free(stdaddr);
-    stdaddr = NULL;
+    if (stdaddr->building)   pfree(stdaddr->building);
+    if (stdaddr->house_num)  pfree(stdaddr->house_num);
+    if (stdaddr->predir)     pfree(stdaddr->predir);
+    if (stdaddr->qual)       pfree(stdaddr->qual);
+    if (stdaddr->pretype)    pfree(stdaddr->pretype);
+    if (stdaddr->name)       pfree(stdaddr->name);
+    if (stdaddr->suftype)    pfree(stdaddr->suftype);
+    if (stdaddr->sufdir)     pfree(stdaddr->sufdir);
+    if (stdaddr->ruralroute) pfree(stdaddr->ruralroute);
+    if (stdaddr->extra)      pfree(stdaddr->extra);
+    if (stdaddr->city)       pfree(stdaddr->city);
+    if (stdaddr->state)      pfree(stdaddr->state);
+    if (stdaddr->country)    pfree(stdaddr->country);
+    if (stdaddr->postcode)   pfree(stdaddr->postcode);
+    if (stdaddr->box)        pfree(stdaddr->box);
+    if (stdaddr->unit)       pfree(stdaddr->unit);
+    pfree(stdaddr);
 }
 
 static char *coalesce( char *a, char *b )
@@ -462,12 +461,12 @@ replace_stdaddr_component(char **field, const char *value)
 
 	if (*field)
 	{
-		free(*field);
+		pfree(*field);
 		*field = NULL;
 	}
 
 	if (value && value[0] != '\0')
-		*field = strdup(value);
+		*field = pstrdup(value);
 }
 
 /*
@@ -491,7 +490,7 @@ apply_component_values_to_stdaddr(
 		}
 		else
 		{
-			stdaddr->state = strdup(state);
+			stdaddr->state = pstrdup(state);
 		}
 	}
 
@@ -546,40 +545,40 @@ STDADDR *std_standardize_mm(STANDARDIZER *std, char *micro, char *macro, int opt
         send_fields_to_stream(stand_address->standard_fields , NULL, 0, 0);
     }
 
-    PAGC_CALLOC_STRUC(stdaddr,STDADDR,1,std -> err_p,NULL);
+    stdaddr = palloc0(sizeof(STDADDR));
 
     if (strlen(stand_address -> standard_fields[0]))
-        stdaddr->building   = strdup(stand_address -> standard_fields[0]);
+        stdaddr->building   = pstrdup(stand_address -> standard_fields[0]);
     if (strlen(stand_address -> standard_fields[1]))
-        stdaddr->house_num  = strdup(stand_address -> standard_fields[1]);
+        stdaddr->house_num  = pstrdup(stand_address -> standard_fields[1]);
     if (strlen(stand_address -> standard_fields[2]))
-        stdaddr->predir     = strdup(stand_address -> standard_fields[2]);
+        stdaddr->predir     = pstrdup(stand_address -> standard_fields[2]);
     if (strlen(stand_address -> standard_fields[3]))
-        stdaddr->qual       = strdup(stand_address -> standard_fields[3]);
+        stdaddr->qual       = pstrdup(stand_address -> standard_fields[3]);
     if (strlen(stand_address -> standard_fields[4]))
-        stdaddr->pretype    = strdup(stand_address -> standard_fields[4]);
+        stdaddr->pretype    = pstrdup(stand_address -> standard_fields[4]);
     if (strlen(stand_address -> standard_fields[5]))
-        stdaddr->name       = strdup(stand_address -> standard_fields[5]);
+        stdaddr->name       = pstrdup(stand_address -> standard_fields[5]);
     if (strlen(stand_address -> standard_fields[6]))
-        stdaddr->suftype    = strdup(stand_address -> standard_fields[6]);
+        stdaddr->suftype    = pstrdup(stand_address -> standard_fields[6]);
     if (strlen(stand_address -> standard_fields[7]))
-        stdaddr->sufdir     = strdup(stand_address -> standard_fields[7]);
+        stdaddr->sufdir     = pstrdup(stand_address -> standard_fields[7]);
     if (strlen(stand_address -> standard_fields[8]))
-        stdaddr->ruralroute = strdup(stand_address -> standard_fields[8]);
+        stdaddr->ruralroute = pstrdup(stand_address -> standard_fields[8]);
     if (strlen(stand_address -> standard_fields[9]))
-        stdaddr->extra      = strdup(stand_address -> standard_fields[9]);
+        stdaddr->extra      = pstrdup(stand_address -> standard_fields[9]);
     if (strlen(stand_address -> standard_fields[10]))
-        stdaddr->city       = strdup(stand_address -> standard_fields[10]);
+        stdaddr->city       = pstrdup(stand_address -> standard_fields[10]);
     if (strlen(stand_address -> standard_fields[11]))
-        stdaddr->state      = strdup(stand_address -> standard_fields[11]);
+        stdaddr->state      = pstrdup(stand_address -> standard_fields[11]);
     if (strlen(stand_address -> standard_fields[12]))
-        stdaddr->country    = strdup(stand_address -> standard_fields[12]);
+        stdaddr->country    = pstrdup(stand_address -> standard_fields[12]);
     if (strlen(stand_address -> standard_fields[13]))
-        stdaddr->postcode   = strdup(stand_address -> standard_fields[13]);
+        stdaddr->postcode   = pstrdup(stand_address -> standard_fields[13]);
     if (strlen(stand_address -> standard_fields[14]))
-        stdaddr->box        = strdup(stand_address -> standard_fields[14]);
+        stdaddr->box        = pstrdup(stand_address -> standard_fields[14]);
     if (strlen(stand_address -> standard_fields[15]))
-        stdaddr->unit       = strdup(stand_address -> standard_fields[15]);
+        stdaddr->unit       = pstrdup(stand_address -> standard_fields[15]);
 
     return stdaddr;
 }
@@ -614,11 +613,7 @@ std_standardize(STANDARDIZER *std,
 
 	if (macro_length > 1)
 	{
-		macro = malloc(macro_length);
-		if (!macro)
-		{
-			RET_ERR("std_standardize: could not allocate macro buffer", std->err_p, NULL);
-		}
+		macro = palloc(macro_length);
 
 		write_ptr = macro;
 		for (size_t i = 0; i < lengthof(components); i++)
@@ -638,7 +633,7 @@ std_standardize(STANDARDIZER *std,
 
 	stdaddr = std_standardize_mm(std, address, macro, options);
 	if (macro)
-		free(macro);
+		pfree(macro);
 
 	apply_component_values_to_stdaddr(stdaddr, city, state, postcode, country);
 	return stdaddr;
