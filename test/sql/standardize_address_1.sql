@@ -17,3 +17,13 @@ EXCEPTION WHEN OTHERS THEN
 	RAISE NOTICE 'blank-input: %', SQLERRM;
 END
 $$;
+-- CVE: rule with >128 terms must be rejected gracefully, not crash (stack OOB write)
+CREATE TEMP TABLE t_overlong_rule(id serial, rule text);
+INSERT INTO t_overlong_rule(rule) SELECT string_agg('1', ' ') FROM generate_series(1, 130);
+DO $$
+BEGIN
+	PERFORM standardize_address('us_lex', 'us_gaz', 't_overlong_rule', '1 Main St', 'Boston, MA');
+EXCEPTION WHEN OTHERS THEN
+	RAISE NOTICE 'overlong-rule: %', SQLERRM;
+END
+$$;
