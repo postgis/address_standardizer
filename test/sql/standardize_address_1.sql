@@ -27,3 +27,13 @@ EXCEPTION WHEN OTHERS THEN
 	RAISE NOTICE 'overlong-rule: %', SQLERRM;
 END
 $$;
+-- OOB read: rule missing type/weight tokens must be rejected, not read past array end
+CREATE TEMP TABLE t_short_rule(id serial, rule text);
+INSERT INTO t_short_rule(rule) VALUES ('1 -1 5 -1');
+DO $$
+BEGIN
+	PERFORM standardize_address('us_lex', 'us_gaz', 't_short_rule', '1 Main St', 'Boston, MA');
+EXCEPTION WHEN OTHERS THEN
+	RAISE NOTICE 'short-rule: %', SQLERRM;
+END
+$$;
