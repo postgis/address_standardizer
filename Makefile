@@ -19,6 +19,7 @@ MODULE_big = $(EXTENSION)
 DATA = $(DATA_EXTENSION).control
 
 DISTNAME = $(EXTENSION)-$(AS_VERSION)
+DISTARCHIVE = $(DISTNAME).tar.gz
 
 SRCS = $(wildcard src/*.c)
 OBJS = $(SRCS:.c=.o)
@@ -44,8 +45,11 @@ PG_CPPFLAGS += -DAS_VERSION=\"$(AS_VERSION)\" -DPCRE_VERSION=2
 #PG_CFLAGS +=
 SHLIB_LINK += -lpcre2-8
 
-
-EXTRA_CLEAN = $(DATA_built) data/$(EXTENSION)_core.sql data/$(DATA_EXTENSION)_core.sql
+EXTRA_CLEAN = \
+	$(DATA_built) \
+	data/$(EXTENSION)_core.sql \
+	data/$(DATA_EXTENSION)_core.sql \
+	$(DISTARCHIVE)
 
 ifdef DEBUG
 COPT += -O0 -Werror -g
@@ -77,7 +81,7 @@ data/$(DATA_EXTENSION)--ANY--$(AS_VERSION).sql: data/$(DATA_EXTENSION)_core.sql 
 
 .PHONY: dist check
 dist:
-	git archive --prefix=$(DISTNAME)/ HEAD | gzip > $(DISTNAME).tar.gz
+	git archive --prefix=$(DISTNAME)/ HEAD | gzip > $(DISTARCHIVE)
 
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)

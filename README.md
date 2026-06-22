@@ -107,7 +107,7 @@ SELECT *
 
 ## Release
 
-The `release.yml` GitHub Action defines a tag-on-release process.
+The `release.yml` GitHub Action defines a release-on-tag process.
 
 * Ensure the `NEWS.md` file is up-to-date and the release date is set to the current date.
 * Ensure that the version in `address_standardizer.control` and `address_standardizer_data_us.control` is set to the release version (eg `default_version = '3.7'`).
