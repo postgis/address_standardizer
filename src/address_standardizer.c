@@ -598,6 +598,9 @@ debug_standardize_address(PG_FUNCTION_ARGS)
 
 	appendStringInfoChar(result, '{');
 
+	if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2) || PG_ARGISNULL(3))
+		PG_RETURN_NULL();
+
 	lextab = text_to_cstring(PG_GETARG_TEXT_P(0));
 	gaztab = text_to_cstring(PG_GETARG_TEXT_P(1));
 	rultab = text_to_cstring(PG_GETARG_TEXT_P(2));
