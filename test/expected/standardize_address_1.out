@@ -102,3 +102,35 @@ END
 $$;
 NOTICE:  load_roles: failed to add rule 1 (6): 1 -1 5 -1
 NOTICE:  short-rule: CreateStd: failed to load 't_short_rule' for rules
+-- Boundary check: the highest valid rule type must remain accepted
+CREATE TEMP TABLE t_max_rule_type(id serial, rule text);
+INSERT INTO t_max_rule_type(rule) VALUES ('29 -1 1 -1 4 1');
+DO $$
+BEGIN
+	PERFORM standardize_address('us_lex', 'us_gaz', 't_max_rule_type', '1 Main St', 'Boston, MA');
+END
+$$;
+-- OOB read/write: rule type equal to MAX_CL must be rejected, not index past the output-link array
+CREATE TEMP TABLE t_high_rule_type(id serial, rule text);
+INSERT INTO t_high_rule_type(rule) VALUES ('29 -1 1 -1 5 1');
+DO $$
+BEGIN
+	PERFORM standardize_address('us_lex', 'us_gaz', 't_high_rule_type', '1 Main St', 'Boston, MA');
+EXCEPTION WHEN OTHERS THEN
+	RAISE NOTICE 'high-rule-type: %', SQLERRM;
+END
+$$;
+NOTICE:  load_roles: failed to add rule 1 (12): 29 -1 1 -1 5 1
+NOTICE:  high-rule-type: CreateStd: failed to load 't_high_rule_type' for rules
+-- OOB read/write: negative rule types must be rejected, not index before the output-link array
+CREATE TEMP TABLE t_low_rule_type(id serial, rule text);
+INSERT INTO t_low_rule_type(rule) VALUES ('29 -1 1 -1 -1 1');
+DO $$
+BEGIN
+	PERFORM standardize_address('us_lex', 'us_gaz', 't_low_rule_type', '1 Main St', 'Boston, MA');
+EXCEPTION WHEN OTHERS THEN
+	RAISE NOTICE 'low-rule-type: %', SQLERRM;
+END
+$$;
+NOTICE:  load_roles: failed to add rule 1 (12): 29 -1 1 -1 -1 1
+NOTICE:  low-rule-type: CreateStd: failed to load 't_low_rule_type' for rules

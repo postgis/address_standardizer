@@ -303,6 +303,15 @@ int rules_add_rule(RULES *rules, int num, int *rule) {
     i++ ;
     w = rule[i] ;
 
+    if ( t < 0 ||
+         t >= MAX_CL ) {
+        RET_ERR2( "rules_add_rule: Rule type %d is outside the valid range 0-%d",
+                  t ,
+                  MAX_CL - 1 ,
+                  rules -> err_p ,
+                  12 ) ;
+    }
+
     classify_link( rules -> r_p ,
                    o_l ,
                    keyw ,
@@ -558,6 +567,15 @@ RULE_PARAM *create_rules( const char *rule_name ,
       fscanf( rule_file ,
               "%d" ,
               &w ) ;
+
+      if ( t < 0 ||
+           t >= MAX_CL ) {
+         RET_ERR2( "create_rules: Rule type %d is outside the valid range 0-%d",
+                   t ,
+                   MAX_CL - 1 ,
+                   err_p ,
+                   NULL ) ;
+      }
 
       classify_link( r_p ,
                      o_l ,
@@ -950,4 +968,3 @@ int output_rule_statistics( RULE_PARAM *r_p ,
    }
    return TRUE ;
 }
-
