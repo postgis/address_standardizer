@@ -36,7 +36,8 @@ REGRESS = \
 	debug_standardize_address \
 	parseaddress \
 	standardize_address_1 \
-	standardize_address_2
+	standardize_address_2 \
+	security_bounds
 
 #PG_LIBS
 #LIBS +=
@@ -49,6 +50,7 @@ EXTRA_CLEAN = \
 	$(DATA_built) \
 	data/$(EXTENSION)_core.sql \
 	data/$(DATA_EXTENSION)_core.sql \
+	test/rules_api_test \
 	$(DISTARCHIVE)
 
 ifdef DEBUG
@@ -79,7 +81,7 @@ data/$(DATA_EXTENSION)--ANY--$(AS_VERSION).sql: data/$(DATA_EXTENSION)_core.sql 
 	cat $^ > $@
 
 
-.PHONY: dist check
+.PHONY: dist check test-rules-api
 dist:
 	git archive --prefix=$(DISTNAME)/ HEAD | gzip > $(DISTARCHIVE)
 
@@ -89,5 +91,13 @@ include $(PGXS)
 
 
 # override pgxs check target and perform in-place extension check
-check:
+test-rules-api: test/rules_api_test
+	./test/rules_api_test
+
+test/rules_api_test: test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_tools.c src/pagc_api.h src/pagc_std_api.h src/gamma.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(PG_CPPFLAGS) -ffunction-sections -Isrc -I$(shell $(PG_CONFIG) --includedir-server) -o $@ test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_tools.c -Wl,--gc-sections -L$(shell $(PG_CONFIG) --pkglibdir) -lpgcommon -lpgport
+
+installcheck: test-rules-api
+
+check: test-rules-api
 	PG_CONFIG="$(PG_CONFIG)" MAKE="$(MAKE)" sh tools/run-check.sh
