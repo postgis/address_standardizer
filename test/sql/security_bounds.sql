@@ -72,6 +72,31 @@ $scanner_bounds$;
 
 SELECT 'scanner_bounds_ok';
 
+CREATE TEMP TABLE t_long_rule(id serial, rule text);
+INSERT INTO t_long_rule(rule)
+SELECT string_agg('1', ' ')
+FROM generate_series(1, 130);
+
+DO $$
+DECLARE
+	rejected boolean := false;
+BEGIN
+	BEGIN
+		PERFORM standardize_address('us_lex', 'us_gaz', 't_long_rule', '1 Main St', 'Boston, MA');
+	EXCEPTION WHEN OTHERS THEN
+		IF SQLERRM <> 'CreateStd: failed to load ''t_long_rule'' for rules' THEN
+			RAISE;
+		END IF;
+		rejected := true;
+		RAISE NOTICE 'long-rule: %', SQLERRM;
+	END;
+
+	IF NOT rejected THEN
+		RAISE EXCEPTION 'oversized rule was accepted';
+	END IF;
+END
+$$;
+
 CREATE TEMP TABLE t_bad_rule_type(id serial, rule text);
 INSERT INTO t_bad_rule_type(rule) VALUES ('1 -1 5 -1 5 0');
 DO $$

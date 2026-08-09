@@ -11,6 +11,10 @@
 
 ### Bug Fixes
 
+- Reject oversized rule strings before parsing can overrun the
+  `address_standardizer` rule buffer
+  (reported by Sarath Kumar, IITM Pravartak Security Team;
+  fixed by Darafei Praliaskouski)
 - Harden scanner and rule parsing bounds checks
   (reported by Eric Ridge, PlanetScale; rule-type fix by Mehmet Ince;
   fixed by Darafei Praliaskouski)
