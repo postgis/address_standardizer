@@ -1,5 +1,5 @@
 # address_standardizer extension
 comment = 'Parse addresses into constituent elements (street name, number, etc)'
-default_version = '3.7'
+default_version = '3.7.1dev'
 relocatable = true
 module_pathname = '$libdir/address_standardizer'

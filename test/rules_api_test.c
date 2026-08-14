@@ -82,17 +82,32 @@ main(void)
 {
 	ERR_PARAM err_p;
 	int valid_extra[] = {1, -1, 5, -1, 4, 0};
+	int valid_perfect_weight[] = {1, -1, 5, -1, 4, PERFECT};
 	int invalid_high[] = {1, -1, 5, -1, MAX_CL, 0};
 	int invalid_low[] = {1, -1, 5, -1, -1, 0};
+	int invalid_weight_high[] = {1, -1, 5, -1, 4, NUMBER_OF_WEIGHTS};
+	int invalid_weight_low[] = {1, -1, 5, -1, 4, -1};
 
 	if (check_rule(&err_p, "valid EXTRA_C rule type", 1,
 	               valid_extra, sizeof(valid_extra) / sizeof(valid_extra[0])))
+		return 1;
+	if (check_rule(&err_p, "valid PERFECT rule weight", 1,
+	               valid_perfect_weight,
+	               sizeof(valid_perfect_weight) / sizeof(valid_perfect_weight[0])))
 		return 1;
 	if (check_rule(&err_p, "invalid MAX_CL rule type", 0,
 	               invalid_high, sizeof(invalid_high) / sizeof(invalid_high[0])))
 		return 1;
 	if (check_rule(&err_p, "invalid negative rule type", 0,
 	               invalid_low, sizeof(invalid_low) / sizeof(invalid_low[0])))
+		return 1;
+	if (check_rule(&err_p, "invalid NUMBER_OF_WEIGHTS rule weight", 0,
+	               invalid_weight_high,
+	               sizeof(invalid_weight_high) / sizeof(invalid_weight_high[0])))
+		return 1;
+	if (check_rule(&err_p, "invalid negative rule weight", 0,
+	               invalid_weight_low,
+	               sizeof(invalid_weight_low) / sizeof(invalid_weight_low[0])))
 		return 1;
 	if (check_maxnode_cleanup(&err_p))
 		return 1;
