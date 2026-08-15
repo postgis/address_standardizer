@@ -19,8 +19,8 @@ import unicodedata
 import urllib.request
 import zipfile
 
-# Carrega variáveis do arquivo .env se existir
-def load_env():
+def load_env() -> None:
+    """Loads environment variables from .env in the repository root if present."""
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     if os.path.exists(env_path):
         with open(env_path, "r", encoding="utf-8") as f:
@@ -43,13 +43,14 @@ UF_CODE_MAP = {
 }
 
 def remove_accents(input_str: str) -> str:
+    """Normalizes characters removing diacritics and converting to uppercase."""
     if not input_str:
         return ""
     nfkd = unicodedata.normalize('NFKD', input_str)
     return "".join([c for c in nfkd if not unicodedata.combining(c)]).upper().strip()
 
-def get_municipality_map():
-    """Obtém o mapeamento oficial de código IBGE -> (Nome do Município, UF) da API do IBGE."""
+def get_municipality_map() -> dict:
+    """Fetches official IBGE code -> (Municipality Name, UF) mapping from IBGE API."""
     url = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
     print("Obtendo lista oficial de municípios do IBGE...")
@@ -72,10 +73,10 @@ def get_municipality_map():
             print(f"✅ {len(muni_map):,} municípios mapeados com sucesso.")
             return muni_map
     except Exception as e:
-        print(f"⚠️ Aviso: Não foi possível consultar a API do IBGE ({e}). Usando fallback.")
-        return {}
+        raise RuntimeError(f"Não foi possível obter o mapeamento de municípios do IBGE: {e}") from e
 
 def download_cnefe(uf: str, dest_dir: str) -> str:
+    """Downloads official CNEFE zip file from IBGE with atomic file writing."""
     uf_upper = uf.upper()
     code = UF_CODE_MAP.get(uf_upper)
     if not code:
@@ -83,6 +84,7 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
 
     filename = f"{code}_{uf_upper}.zip"
     dest_path = os.path.join(dest_dir, filename)
+    tmp_path = dest_path + ".tmp"
 
     if os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000000:
         print(f"Arquivo já existe em cache: {dest_path} ({os.path.getsize(dest_path)/(1024*1024):.2f} MB)")
@@ -94,7 +96,7 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
 
     start_time = time.time()
     req = urllib.request.Request(url, headers={'User-Agent': 'PostGIS-CNEFE-Importer/1.0'})
-    with urllib.request.urlopen(req, timeout=120) as response, open(dest_path, "wb") as out_file:
+    with urllib.request.urlopen(req, timeout=120) as response, open(tmp_path, "wb") as out_file:
         total_size = int(response.headers.get('Content-Length', 0))
         downloaded = 0
         chunk_size = 1024 * 1024
@@ -111,12 +113,13 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
                 mb_total = total_size / (1024 * 1024)
                 print(f"\rProgresso do Download: {percent:.1f}% ({mb_down:.1f}/{mb_total:.1f} MB)", end="", flush=True)
 
+    os.replace(tmp_path, dest_path)
     elapsed = time.time() - start_time
     print(f"\n✅ Download concluído em {elapsed:.1f}s ({os.path.getsize(dest_path)/(1024*1024):.2f} MB).")
     return dest_path
 
-def ensure_tables_exist():
-    """Garante que a tabela e extensões existam no PostgreSQL."""
+def ensure_tables_exist() -> None:
+    """Ensures that the cnefe_enderecos table and required extensions exist in PostgreSQL."""
     sql = """
     CREATE EXTENSION IF NOT EXISTS postgis;
     CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -143,10 +146,19 @@ def ensure_tables_exist():
         "-d", os.getenv("POSTGRES_DB", "address_db"), "-c", sql
     ], check=True)
 
-def import_cnefe_to_postgres(zip_path: str, uf: str, limit: int = None):
+def import_cnefe_to_postgres(zip_path: str, uf: str, limit: int = None) -> None:
+    """Streams CSV data from zip file into PostgreSQL with COPY and builds spatial indexes."""
     ensure_tables_exist()
     muni_map = get_municipality_map()
     uf_upper = uf.upper()
+
+    print(f"Preparando importação para UF: {uf_upper}...")
+    # Idempotent replacement for this UF
+    subprocess.run([
+        "docker", "exec", "-i", "postgis_br", "psql", "-U", os.getenv("POSTGRES_USER", "postgres"),
+        "-d", os.getenv("POSTGRES_DB", "address_db"),
+        "-c", f"DELETE FROM cnefe_enderecos WHERE uf = '{uf_upper}';"
+    ], check=True)
 
     print(f"Lendo e transmitindo dados de {zip_path}...")
     with zipfile.ZipFile(zip_path, 'r') as z:
@@ -207,16 +219,18 @@ def import_cnefe_to_postgres(zip_path: str, uf: str, limit: int = None):
                     break
         
         proc.stdin.close()
-        proc.wait()
+        return_code = proc.wait()
+        if return_code != 0:
+            raise subprocess.CalledProcessError(return_code, psql_cmd)
         
         elapsed = time.time() - start_time
         print(f"\n✅ Total inserido no banco: {count:,} registros em {elapsed:.1f}s.")
 
     print("\nAtualizando geometrias espaciais PostGIS e criando índices...")
-    post_import_sql = """
+    post_import_sql = f"""
     UPDATE cnefe_enderecos 
     SET geom = ST_SetSRID(ST_Point(longitude, latitude), 4326) 
-    WHERE geom IS NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;
+    WHERE uf = '{uf_upper}' AND geom IS NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;
     
     CREATE INDEX IF NOT EXISTS idx_cnefe_lookup ON cnefe_enderecos (uf, municipio, logradouro, numero);
     CREATE INDEX IF NOT EXISTS idx_cnefe_cep ON cnefe_enderecos (cep);
@@ -229,7 +243,8 @@ def import_cnefe_to_postgres(zip_path: str, uf: str, limit: int = None):
     ], check=True)
     print("✅ Geometrias PostGIS e índices otimizados com sucesso!")
 
-def main():
+def main() -> None:
+    """Main CLI entrypoint for CNEFE address importer."""
     default_dest = os.getenv("CNEFE_DOWNLOAD_DIR")
     if not default_dest:
         pg_data = os.getenv("POSTGRES_DATA_DIR", "./.pgdata")

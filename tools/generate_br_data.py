@@ -610,12 +610,12 @@ def generate_br_rules_sql(output_path: str):
     # 8. Padrão Loteamento: [TYPE/UNITH] [NUMBER] [UNITH] [NUMBER]
     # Ex: Quadra 10 Lote 5
     rules.append(([19, 0, 19, 0], [16, 17, 16, 17], 1, 15))
-    rules.append(([2, 0, 19, 0], [4, 5, 16, 17], 1, 15))
 
     # 9. Standalone words
     rules.append(([1], [5], 1, 5))
     rules.append(([1, 1], [5, 5], 1, 5))
     rules.append(([1, 1, 1], [5, 5, 5], 1, 5))
+
 
     # -------------------------------------------------------------
     # B. MACRO RULES (Rule Type 0 = MACRO_C)
@@ -675,8 +675,17 @@ def generate_br_rules_sql(output_path: str):
     rules.append(([0, 0], [13, 13], 0, 14))
 
     # -------------------------------------------------------------
-    # C. Write SQL Output
+    # C. Write SQL Output (with automatic deduplication)
     # -------------------------------------------------------------
+    unique_rules = []
+    seen = set()
+    for inp, outp, rtype, weight in rules:
+        key = (tuple(inp), tuple(outp), rtype)
+        if key not in seen:
+            seen.add(key)
+            unique_rules.append((inp, outp, rtype, weight))
+    rules = unique_rules
+
     with open(output_path, "w", encoding="utf-8") as f:
         f.write("-- ==========================================================================\n")
         f.write("-- PostGIS address_standardizer: Brazilian Grammar Rules Dataset (br_rules)\n")
@@ -698,6 +707,7 @@ def generate_br_rules_sql(output_path: str):
             f.write(f"INSERT INTO br_rules (rule) VALUES ('{rule_str}');\n")
 
     print(f"Generated {output_path} with {len(rules)} rules.")
+
 
 def generate_br_data_extension_sql(output_path: str):
     """Generates sql/26_br_data_extension.sql"""
