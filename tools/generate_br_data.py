@@ -9,11 +9,11 @@ Note:
   No proprietary postal database (such as Correios DNE) is used.
 """
 
+import gzip
 import json
-import urllib.request
-import unicodedata
 import os
-import re
+import unicodedata
+import urllib.request
 
 def remove_accents(input_str: str) -> str:
     nfkd_form = unicodedata.normalize('NFKD', input_str)
@@ -282,39 +282,32 @@ CONNECTORS = [
 BRAZIL_STATES = [
     ("AC", "ACRE"),
     ("AL", "ALAGOAS"),
-    ("AP", "AMAPA"),
+    ("AP", "AMAPÁ"),
     ("AM", "AMAZONAS"),
     ("BA", "BAHIA"),
-    ("CE", "CEARA"),
+    ("CE", "CEARÁ"),
     ("DF", "DISTRITO FEDERAL"),
-    ("ES", "ESPIRITO SANTO"),
-    ("GO", "GOIAS"),
-    ("MA", "MARANHAO"),
+    ("ES", "ESPÍRITO SANTO"),
+    ("GO", "GOIÁS"),
+    ("MA", "MARANHÃO"),
     ("MT", "MATO GROSSO"),
     ("MS", "MATO GROSSO DO SUL"),
     ("MG", "MINAS GERAIS"),
-    ("PA", "PARA"),
-    ("PB", "PARAIBA"),
-    ("PR", "PARANA"),
+    ("PA", "PARÁ"),
+    ("PB", "PARAÍBA"),
+    ("PR", "PARANÁ"),
     ("PE", "PERNAMBUCO"),
-    ("PI", "PIAUI"),
+    ("PI", "PIAUÍ"),
     ("RJ", "RIO DE JANEIRO"),
     ("RN", "RIO GRANDE DO NORTE"),
     ("RS", "RIO GRANDE DO SUL"),
-    ("RO", "RONDONIA"),
+    ("RO", "RONDÔNIA"),
     ("RR", "RORAIMA"),
     ("SC", "SANTA CATARINA"),
-    ("SP", "SAO PAULO"),
+    ("SP", "SÃO PAULO"),
     ("SE", "SERGIPE"),
     ("TO", "TOCANTINS")
 ]
-
-import json
-import urllib.request
-import unicodedata
-import os
-import re
-import gzip
 
 def fetch_ibge_municipalities():
     """Fetches all 5,571 Brazilian municipalities from the official IBGE Open Data API."""
@@ -421,27 +414,26 @@ def generate_br_gaz_sql(output_path: str, ibge_data: list):
     gaz_entries = []
 
     # 1. Country & Highway Acronyms
-    gaz_entries.append((1, "BRASIL", "BRASIL", 12))
-    gaz_entries.append((2, "BRASIL", "BRASIL", 1))
-    gaz_entries.append((1, "BRAZIL", "BRASIL", 12))
-    gaz_entries.append((1, "BR", "BRASIL", 12))
-    gaz_entries.append((2, "BR", "BR", 1))
-    gaz_entries.append((3, "BR", "BR", 6))
-
+    gaz_entries.append(("BRASIL", "BRASIL", 12))
+    gaz_entries.append(("BRASIL", "BRASIL", 1))
+    gaz_entries.append(("BRAZIL", "BRASIL", 12))
+    gaz_entries.append(("BR", "BRASIL", 12))
+    gaz_entries.append(("BR", "BR", 1))
+    gaz_entries.append(("BR", "BR", 6))
 
     # 2. States (Siglas and Full Names)
     for sigla, name in BRAZIL_STATES:
         norm_name = normalize_text(name)
         # Sigla as State (Token 11 = PROV) and Word (Token 1)
-        gaz_entries.append((1, sigla, sigla, 11))
-        gaz_entries.append((2, sigla, sigla, 1))
+        gaz_entries.append((sigla, sigla, 11))
+        gaz_entries.append((sigla, sigla, 1))
 
         # Full state name as State (Token 11)
-        gaz_entries.append((1, norm_name, sigla, 11))
-        gaz_entries.append((2, norm_name, norm_name, 1))
+        gaz_entries.append((norm_name, sigla, 11))
+        gaz_entries.append((norm_name, norm_name, 1))
 
         if norm_name != name.upper():
-            gaz_entries.append((1, name.upper(), sigla, 11))
+            gaz_entries.append((name.upper(), sigla, 11))
 
     # 3. Municipalities (From IBGE)
     if ibge_data:
@@ -450,10 +442,10 @@ def generate_br_gaz_sql(output_path: str, ibge_data: list):
             if nome:
                 norm_nome = normalize_text(nome)
                 # City entry (Token 10 = CITY)
-                gaz_entries.append((1, norm_nome, norm_nome, 10))
-                gaz_entries.append((2, norm_nome, norm_nome, 1))
+                gaz_entries.append((norm_nome, norm_nome, 10))
+                gaz_entries.append((norm_nome, norm_nome, 1))
                 if nome.upper() != norm_nome:
-                    gaz_entries.append((1, nome.upper(), norm_nome, 10))
+                    gaz_entries.append((nome.upper(), norm_nome, 10))
     else:
         # Fallback major capitals
         capitals = [
@@ -466,12 +458,12 @@ def generate_br_gaz_sql(output_path: str, ibge_data: list):
             "UBERLANDIA", "FLORIANOPOLIS", "CUIABA", "ARACAJU", "VITORIA"
         ]
         for cap in capitals:
-            gaz_entries.append((1, cap, cap, 10))
-            gaz_entries.append((2, cap, cap, 1))
+            gaz_entries.append((cap, cap, 10))
+            gaz_entries.append((cap, cap, 1))
 
     # Clean sequence numbers per word
     word_groups = {}
-    for seq, word, stdword, tok in gaz_entries:
+    for word, stdword, tok in gaz_entries:
         if word not in word_groups:
             word_groups[word] = []
         if (stdword, tok) not in [(sw, t) for _, sw, t in word_groups[word]]:
