@@ -95,11 +95,12 @@ A complete offline geocoding system in PostGIS operates in two complementary sta
    * Parses and normalizes freeform input text (handling abbreviations, casing, word orders, and missing commas).
    * Fast, lightweight (~1 MB), and bundled directly into PostGIS.
 2. **Reference Geocoding Database (e.g. IBGE CNEFE / OpenStreetMap):**
-   * Stores the physical ground-truth database containing millions of address points, official Postal Codes (CEP), and exact GPS coordinates (`Point(4326)`).
+   * Stores the physical ground-truth database containing millions of address points, official Postal Codes (CEP), and GPS coordinates (`Point(4326)` where mapped by census operations).
 
-```
+```text
 [Raw User Address] ──> [standardize_address()] ──> [SQL Query / Trigram / KNN] ──> [GPS Latitude & Longitude + CEP]
 ```
+
 
 📖 **Detailed Step-by-Step Guide:** For table schemas, SQL fuzzy search queries, and import instructions, see [docs/geocodificador_cnefe_brasil.md](docs/geocodificador_cnefe_brasil.md).
 

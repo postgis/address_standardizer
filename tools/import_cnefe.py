@@ -113,6 +113,9 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
                 mb_total = total_size / (1024 * 1024)
                 print(f"\rProgresso do Download: {percent:.1f}% ({mb_down:.1f}/{mb_total:.1f} MB)", end="", flush=True)
 
+    if total_size > 0 and downloaded < total_size:
+        raise IOError(f"Download truncado para {uf_upper}: recebidos {downloaded} bytes de {total_size} bytes esperados.")
+
     os.replace(tmp_path, dest_path)
     elapsed = time.time() - start_time
     print(f"\n✅ Download concluído em {elapsed:.1f}s ({os.path.getsize(dest_path)/(1024*1024):.2f} MB).")
@@ -148,9 +151,12 @@ def ensure_tables_exist() -> None:
 
 def import_cnefe_to_postgres(zip_path: str, uf: str, limit: int = None) -> None:
     """Streams CSV data from zip file into PostgreSQL with COPY and builds spatial indexes."""
+    uf_upper = uf.upper()
+    if uf_upper not in UF_CODE_MAP:
+        raise ValueError(f"UF inválida: {uf}")
+
     ensure_tables_exist()
     muni_map = get_municipality_map()
-    uf_upper = uf.upper()
 
     print(f"Preparando importação para UF: {uf_upper}...")
     # Idempotent replacement for this UF
@@ -172,6 +178,7 @@ def import_cnefe_to_postgres(zip_path: str, uf: str, limit: int = None) -> None:
         ]
 
         proc = subprocess.Popen(psql_cmd, stdin=subprocess.PIPE, text=True, bufsize=65536)
+        tsv_writer = csv.writer(proc.stdin, delimiter='\t', lineterminator='\n', quoting=csv.QUOTE_MINIMAL)
         
         start_time = time.time()
         count = 0
@@ -198,6 +205,9 @@ def import_cnefe_to_postgres(zip_path: str, uf: str, limit: int = None) -> None:
                 else:
                     logradouro = logr_base
                 
+                if not logradouro:
+                    logradouro = "SEM DENOMINACAO"
+                
                 numero = row.get("NUM_ENDERECO", "").strip()
                 modificador = row.get("DSC_MODIFICADOR", "").strip()
                 bairro = remove_accents(row.get("DSC_LOCALIDADE", ""))
@@ -206,8 +216,10 @@ def import_cnefe_to_postgres(zip_path: str, uf: str, limit: int = None) -> None:
                 lat_str = row.get("LATITUDE", "").replace(",", ".").strip()
                 lon_str = row.get("LONGITUDE", "").replace(",", ".").strip()
                 
-                tsv_line = f"{cod_muni}\t{municipio}\t{uf_upper}\t{tipo}\t{titulo}\t{logradouro}\t{numero}\t{modificador}\t{bairro}\t{cep}\t{lat_str}\t{lon_str}\n"
-                proc.stdin.write(tsv_line)
+                tsv_writer.writerow([
+                    cod_muni, municipio, uf_upper, tipo, titulo, logradouro,
+                    numero, modificador, bairro, cep, lat_str, lon_str
+                ])
                 count += 1
                 
                 if count % 100000 == 0:
@@ -222,6 +234,7 @@ def import_cnefe_to_postgres(zip_path: str, uf: str, limit: int = None) -> None:
         return_code = proc.wait()
         if return_code != 0:
             raise subprocess.CalledProcessError(return_code, psql_cmd)
+
         
         elapsed = time.time() - start_time
         print(f"\n✅ Total inserido no banco: {count:,} registros em {elapsed:.1f}s.")
