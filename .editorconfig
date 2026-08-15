@@ -26,3 +26,8 @@ indent_size = 2
 # Makefiles want tab indentation
 [{Makefile.in,Makefile,GNUmakefile}]
 indent_style = tab
+
+# pg_regress fixtures encode psql's exact aligned-mode output, including
+# header trailing spaces; stripping them makes installcheck fail
+[test/expected/*.out]
+trim_trailing_whitespace = false
