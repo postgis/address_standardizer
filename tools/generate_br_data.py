@@ -144,6 +144,35 @@ STREET_TYPES = [
     ("MARGINAL", "MARGINAL", 2),
     ("ANEL", "ANEL VIARIO", 2),
     ("CONTORNO", "CONTORNO", 2),
+    # Highway identifiers (BR-101, SP-330, RJ-116, etc.)
+    ("BR", "BR", 1),
+    ("SP", "SP", 1),
+    ("RJ", "RJ", 1),
+    ("MG", "MG", 1),
+    ("PR", "PR", 1),
+    ("SC", "SC", 1),
+    ("RS", "RS", 1),
+    ("BA", "BA", 1),
+    ("GO", "GO", 1),
+    ("DF", "DF", 1),
+    ("ES", "ES", 1),
+    ("PE", "PE", 1),
+    ("CE", "CE", 1),
+    ("MT", "MT", 1),
+    ("MS", "MS", 1),
+    ("PA", "PA", 1),
+    ("MA", "MA", 1),
+    ("AM", "AM", 1),
+    ("RN", "RN", 1),
+    ("PB", "PB", 1),
+    ("PI", "PI", 1),
+    ("AL", "AL", 1),
+    ("SE", "SE", 1),
+    ("RO", "RO", 1),
+    ("TO", "TO", 1),
+    ("AC", "AC", 1),
+    ("AP", "AP", 1),
+    ("RR", "RR", 1),
 ]
 
 # Complement / Unit words (BUILDH = 19, SINGLE = 18, etc.)
@@ -381,11 +410,14 @@ def generate_br_gaz_sql(output_path: str, ibge_data: list):
     # Token 10 = CITY, Token 11 = PROV (State), Token 12 = NATION, Token 1 = WORD
     gaz_entries = []
 
-    # 1. Country
+    # 1. Country & Highway Acronyms
     gaz_entries.append((1, "BRASIL", "BRASIL", 12))
     gaz_entries.append((2, "BRASIL", "BRASIL", 1))
     gaz_entries.append((1, "BRAZIL", "BRASIL", 12))
     gaz_entries.append((1, "BR", "BRASIL", 12))
+    gaz_entries.append((2, "BR", "BR", 1))
+    gaz_entries.append((3, "BR", "BR", 6))
+
 
     # 2. States (Siglas and Full Names)
     for sigla, name in BRAZIL_STATES:
@@ -555,12 +587,16 @@ def generate_br_rules_sql(output_path: str):
     rules.append(([1, 7, 1, 0], [5, 5, 5, 1], 1, 12))
 
     # 6. Rodovias: [ROAD] [WORD...] [MILE] [NUMBER]
-    # Ex: Rodovia dos Imigrantes Km 50 / Rodovia BR-101 Km 100
+    # Ex: Rodovia dos Imigrantes Km 50 / Rodovia BR-101 Km 100 / Rodovia Anhanguera Km 15
     rules.append(([6, 1, 20, 0], [4, 5, 8, 1], 1, 16))
     rules.append(([6, 1, 1, 20, 0], [4, 5, 5, 8, 1], 1, 16))
     rules.append(([6, 7, 1, 20, 0], [4, 5, 5, 8, 1], 1, 16))
     rules.append(([6, 7, 1, 1, 20, 0], [4, 5, 5, 5, 8, 1], 1, 16))
     rules.append(([6, 0, 20, 0], [4, 5, 8, 1], 1, 16))
+    rules.append(([6, 1, 0, 20, 0], [4, 5, 5, 8, 1], 1, 16))      # Ex: Rodovia BR 101 Km 150
+    rules.append(([6, 1, 9, 0, 20, 0], [4, 5, 5, 5, 8, 1], 1, 16)) # Ex: Rodovia BR-101 Km 150
+    rules.append(([6, 1, 0], [4, 5, 5], 1, 12))                    # Ex: Rodovia BR 101
+    rules.append(([6, 1, 9, 0], [4, 5, 5, 5], 1, 12))              # Ex: Rodovia BR-101
 
     # 7. Padrão Brasília: [TYPE] [NUMBER] [BUILDH] [WORD/SINGLE/NUMBER]
     # Ex: SQS 308 Bloco B / SQS 308 Bloco B Apto 101
