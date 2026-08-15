@@ -1,0 +1,16 @@
+services:
+  postgis:
+    image: postgis/postgis:15-3.3
+    container_name: postgis_br
+    environment:
+      POSTGRES_DB: address_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      # Armazenamento persistente no volume externo /Volumes/240
+      - /Volumes/240/postgres_postgis_data:/var/lib/postgresql/data
+      # Scripts de inicialização automática
+      - ./data:/docker-entrypoint-initdb.d/00_data:ro
+    restart: unless-stopped

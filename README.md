@@ -70,37 +70,45 @@ psql -d address_db -c "CREATE EXTENSION address_standardizer"
 ```
 
 
+## Datasets
+
+The extension supports datasets for different countries:
+* `address_standardizer_data_us`: United States address dataset (USPS based lexicon and gazetteer).
+* `address_standardizer_data_br`: Brazilian address dataset (IBGE / OpenStreetMap based lexicon, gazetteer of all 5,570 municipalities, 27 states, and Brazilian address grammar rules).
+
+### Open Data Provenance for Brazil Dataset (`address_standardizer_data_br`)
+
+> **Data Provenance & Licensing Statement:**
+> The `address_standardizer_data_br` dataset is constructed exclusively from 100% public, official open data sources:
+> * **IBGE (Instituto Brasileiro de Geografia e Estatística):** Official Public API for Localidades (5,570 Brazilian Municipalities and 27 Federative Units / States) and CNEFE 2022 (Cadastro Nacional de Endereços para Fins Estatísticos) under open government data terms.
+> * **OpenStreetMap (OSM):** Standard community open terminology for Brazilian thoroughfare and unit types.
+> 
+> *No proprietary or copyrighted postal databases (such as Empresa Brasileira de Correios e Telégrafos - DNE) are used.*
+
 ## Test and Try
 
-```
-SELECT *
-  FROM parse_address('2099 university ave w, saint paul, mn, 55104-3431');
-
-SELECT *
-  FROM parse_address('university ave w @ main st, saint paul, mn, 55104-3431');
-
-SELECT *
-  FROM parse_address('385 Landgrove Rd  Landgrove VT 05148');
-
--- "385";"Landgrove Rd";"";"385 Landgrove Rd";"Landgrove";"VT";"05148";"";"US"
-
-SELECT *
-  FROM standardize_address(
-        'SELECT seq, word::text, stdword::text, token FROM gaz UNION ALL SELECT seq, word::text, stdword::text, token FROM lex ',
-        'SELECT seq, word::text, stdword::text, token FROM gaz ORDER BY id',
-        'SELECT * FROM rules ORDER BY id',
-        'SELECT 0::int4 AS id, ''1071 B Ave''::text AS micro, ''Loxley, AL 36551''::text AS macro');
-
-SELECT *
-  FROM standardize_address(
-        'SELECT seq, word::text, stdword::text, token FROM lex ORDER BY id',
-        'SELECT seq, word::text, stdword::text, token FROM gaz ORDER BY id',
-        'SELECT * FROM rules ORDER BY id',
-        'SELECT 0::int4 AS id,
-           ''116 commonwealth ave apt a''::text AS micro,
-           ''west concord, ma 01742''::text AS macro');
+### United States (US)
+```sql
+SELECT * FROM standardize_address('us_lex', 'us_gaz', 'us_rules', '123 Main Street', 'Kansas City, MO 45678');
 ```
 
+### Brazil (BR)
+```sql
+-- Standard street address
+SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Augusta, 100', 'Sao Paulo, SP');
+
+-- Address with Apartment and Postal Code (CEP)
+SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Avenida Paulista, 1000 Apto 101', 'Sao Paulo, SP, 01310 100');
+
+-- Highway with Kilometer
+SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rodovia dos Imigrantes, Km 50', 'Sao Paulo, SP');
+
+-- Brasília Superquadra / Block format
+SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'SQS 308 Bloco B Apto 101', 'Brasilia, DF');
+
+-- Lot / Allotment format
+SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Quadra 10 Lote 5', 'Goiania, GO');
+```
 
 # Development
 

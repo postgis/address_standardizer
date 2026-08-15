@@ -9,3 +9,4 @@ test/regression.out
 test/results/*.out
 test/results/*.diff
 *.tar.gz
+.DS_Store

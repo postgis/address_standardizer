@@ -3,6 +3,7 @@
 #
 EXTENSION = address_standardizer
 DATA_EXTENSION = address_standardizer_data_us
+DATA_EXTENSION_BR = address_standardizer_data_br
 
 #
 # To set the version, edit the default in the control file
@@ -16,7 +17,7 @@ AS_VERSION = $(shell grep default $(EXTENSION).control | cut -f2 -d'=' | tr -d "
 PG_CONFIG = pg_config
 
 MODULE_big = $(EXTENSION)
-DATA = $(DATA_EXTENSION).control
+DATA = $(DATA_EXTENSION).control $(DATA_EXTENSION_BR).control
 
 DISTNAME = $(EXTENSION)-$(AS_VERSION)
 DISTARCHIVE = $(DISTNAME).tar.gz
@@ -28,7 +29,9 @@ DATA_built = \
 	data/$(EXTENSION)--$(AS_VERSION).sql \
 	data/$(EXTENSION)--ANY--$(AS_VERSION).sql \
 	data/$(DATA_EXTENSION)--$(AS_VERSION).sql \
-	data/$(DATA_EXTENSION)--ANY--$(AS_VERSION).sql
+	data/$(DATA_EXTENSION)--ANY--$(AS_VERSION).sql \
+	data/$(DATA_EXTENSION_BR)--$(AS_VERSION).sql \
+	data/$(DATA_EXTENSION_BR)--ANY--$(AS_VERSION).sql
 
 REGRESS_OPTS = --inputdir=test --outputdir=test
 REGRESS = \
@@ -37,6 +40,7 @@ REGRESS = \
 	parseaddress \
 	standardize_address_1 \
 	standardize_address_2 \
+	standardize_address_br \
 	security_bounds
 
 #PG_LIBS
@@ -50,6 +54,7 @@ EXTRA_CLEAN = \
 	$(DATA_built) \
 	data/$(EXTENSION)_core.sql \
 	data/$(DATA_EXTENSION)_core.sql \
+	data/$(DATA_EXTENSION_BR)_core.sql \
 	test/rules_api_test \
 	$(DISTARCHIVE)
 
@@ -68,6 +73,9 @@ data/$(EXTENSION)_core.sql: sql/01_types.sql sql/12_functions.sql | data
 data/$(DATA_EXTENSION)_core.sql: sql/13_us_lex.sql sql/14_us_gaz.sql sql/15_us_rules.sql sql/16_data_extension.sql | data
 	cat $^ > $@
 
+data/$(DATA_EXTENSION_BR)_core.sql: sql/23_br_lex.sql sql/24_br_gaz.sql sql/25_br_rules.sql sql/26_br_data_extension.sql | data
+	cat $^ > $@
+
 data/$(EXTENSION)--$(AS_VERSION).sql: data/$(EXTENSION)_core.sql | data
 	cat $^ > $@
 
@@ -78,6 +86,12 @@ data/$(DATA_EXTENSION)--$(AS_VERSION).sql: data/$(DATA_EXTENSION)_core.sql | dat
 	cat $^ > $@
 
 data/$(DATA_EXTENSION)--ANY--$(AS_VERSION).sql: data/$(DATA_EXTENSION)_core.sql | data
+	cat $^ > $@
+
+data/$(DATA_EXTENSION_BR)--$(AS_VERSION).sql: data/$(DATA_EXTENSION_BR)_core.sql | data
+	cat $^ > $@
+
+data/$(DATA_EXTENSION_BR)--ANY--$(AS_VERSION).sql: data/$(DATA_EXTENSION_BR)_core.sql | data
 	cat $^ > $@
 
 
