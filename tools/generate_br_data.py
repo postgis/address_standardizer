@@ -334,11 +334,10 @@ def fetch_ibge_municipalities():
             print(f"Successfully fetched {len(data)} municipalities from IBGE API.")
             return data
     except Exception as e:
-        print(f"Warning: Could not fetch from IBGE API ({e}). Using cached/embedded core municipalities.")
-        return []
+        raise RuntimeError(f"Erro crítico: Não foi possível obter a lista de municípios do IBGE ({e}).") from e
 
 def generate_br_lex_sql(output_path: str):
-    """Generates sql/23_br_lex.sql"""
+    """Generates sql/23_br_lex.sql with Brazilian thoroughfares, units, and connectors."""
     entries = []
     
     # Add Street Types
@@ -376,7 +375,17 @@ def generate_br_lex_sql(output_path: str):
             unique_entries.append((seq, word.upper(), stdword.upper(), tok))
 
     # Sort
-    unique_entries.sort(key=lambda x: x[1])
+    unique_entries.sort(key=lambda x: (x[1], x[2], x[3]))
+
+    # Calculate monotonic seq for identical words
+    word_counters = {}
+    final_entries = []
+    for _, word, stdword, tok in unique_entries:
+        seq = word_counters.get(word, 0) + 1
+        word_counters[word] = seq
+        final_entries.append((seq, word, stdword, tok))
+    unique_entries = final_entries
+
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write("-- ==========================================================================\n")

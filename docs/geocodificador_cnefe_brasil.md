@@ -44,15 +44,17 @@ CREATE TABLE IF NOT EXISTS cnefe_enderecos (
     municipio text NOT NULL,
     uf varchar(2) NOT NULL,
     tipo text,              -- RUA, AVENIDA, etc.
+    titulo text,            -- DOUTOR, PRESIDENTE, etc.
     logradouro text NOT NULL, -- AUGUSTA, PAULISTA, etc.
-    numero text,            -- 100, 1000, S/N
-    complemento text,       -- APTO 12, BLOCO B
+    numero text,            -- 100, 1000, 0
+    modificador text,       -- SN, KM, etc.
     bairro text,            -- BELA VISTA, CENTRO
     cep varchar(9),         -- 01304-000 ou 01304000
     latitude double precision,
     longitude double precision,
     geom geometry(Point, 4326) -- Coordenada WGS 84
 );
+
 
 -- 3. Índices de busca rápida (B-tree e Espacial GiST)
 CREATE INDEX IF NOT EXISTS idx_cnefe_lookup 
@@ -145,7 +147,7 @@ Encontrar o endereço e CEP mais próximos de um ponto no mapa (ex: GPS do motor
 
 ```sql
 SELECT 
-    c.tipo || ' ' || c.logradouro || ', ' || c.numero AS endereco,
+    CONCAT_WS(' ', c.tipo, c.logradouro) || COALESCE(', ' || NULLIF(c.numero, '0'), '') AS endereco,
     c.bairro,
     c.municipio,
     c.uf,
@@ -155,6 +157,7 @@ FROM cnefe_enderecos c
 ORDER BY c.geom <-> ST_SetSRID(ST_Point(-46.6521, -23.5532), 4326) -- Busca ultra-rápida por KNN GiST
 LIMIT 1;
 ```
+
 
 ---
 

@@ -74,13 +74,13 @@ psql -d address_db -c "CREATE EXTENSION address_standardizer"
 
 The extension supports datasets for different countries:
 * `address_standardizer_data_us`: United States address dataset (USPS based lexicon and gazetteer).
-* `address_standardizer_data_br`: Brazilian address dataset (IBGE / OpenStreetMap based lexicon, gazetteer of all 5,570 municipalities, 27 states, and Brazilian address grammar rules).
+* `address_standardizer_data_br`: Brazilian address dataset (IBGE / OpenStreetMap based lexicon, gazetteer of all 5,571 municipalities, 27 states, and Brazilian address grammar rules).
 
 ### Open Data Provenance for Brazil Dataset (`address_standardizer_data_br`)
 
 > **Data Provenance & Licensing Statement:**
 > The `address_standardizer_data_br` dataset is constructed exclusively from 100% public, official open data sources:
-> * **IBGE (Instituto Brasileiro de Geografia e Estatística):** Official Public API for Localidades (5,570 Brazilian Municipalities and 27 Federative Units / States) and CNEFE 2022 (Cadastro Nacional de Endereços para Fins Estatísticos) under open government data terms.
+> * **IBGE (Instituto Brasileiro de Geografia e Estatística):** Official Public API for Localidades (5,571 Brazilian Municipalities and 27 Federative Units / States) and CNEFE 2022 (Cadastro Nacional de Endereços para Fins Estatísticos) under open government data terms.
 > * **OpenStreetMap (OSM):** Standard community open terminology for Brazilian thoroughfare and unit types.
 > 
 > *No proprietary or copyrighted postal databases (such as Empresa Brasileira de Correios e Telégrafos - DNE) are used.*
@@ -109,11 +109,17 @@ A complete offline geocoding system in PostGIS operates in two complementary sta
 
 ### United States (US)
 ```sql
+CREATE EXTENSION IF NOT EXISTS address_standardizer;
+CREATE EXTENSION IF NOT EXISTS address_standardizer_data_us;
+
 SELECT * FROM standardize_address('us_lex', 'us_gaz', 'us_rules', '123 Main Street', 'Kansas City, MO 45678');
 ```
 
 ### Brazil (BR)
 ```sql
+CREATE EXTENSION IF NOT EXISTS address_standardizer;
+CREATE EXTENSION IF NOT EXISTS address_standardizer_data_br;
+
 -- Standard street address
 SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Augusta, 100', 'Sao Paulo, SP');
 
@@ -129,6 +135,7 @@ SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'SQS 308 Bloco
 -- Lot / Allotment format
 SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Quadra 10 Lote 5', 'Goiania, GO');
 ```
+
 
 # Development
 
