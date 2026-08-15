@@ -69,6 +69,22 @@ createdb address_db
 psql -d address_db -c "CREATE EXTENSION address_standardizer"
 ```
 
+## Datasets
+
+The extension supports datasets for different countries:
+
+* `address_standardizer_data_us`: United States address dataset (USPS based lexicon and gazetteer).
+* `address_standardizer_data_br`: Brazilian address dataset (IBGE / OpenStreetMap based lexicon, gazetteer of all 5,571 municipalities, 27 states, and Brazilian address grammar rules).
+
+### Open Data Provenance for Brazil Dataset (`address_standardizer_data_br`)
+
+> **Data Provenance & Licensing Statement:**
+> The `address_standardizer_data_br` dataset is constructed exclusively from public open sources:
+> * **IBGE (Instituto Brasileiro de Geografia e Estatística):** Official government open data from the Public API for Localidades (5,571 Brazilian Municipalities and 27 Federative Units / States) and CNEFE 2022 (Cadastro Nacional de Endereços para Fins Estatísticos) under open government data terms.
+> * **OpenStreetMap (OSM):** Community open terminology for Brazilian thoroughfare and unit types, © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), licensed under the [Open Data Commons Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/).
+>
+> *No proprietary or copyrighted postal databases (such as Empresa Brasileira de Correios e Telégrafos - DNE) are used.*
+
 
 ## Test and Try
 
@@ -101,6 +117,19 @@ SELECT *
            ''west concord, ma 01742''::text AS macro');
 ```
 
+### Brazil (BR)
+
+```sql
+CREATE EXTENSION IF NOT EXISTS address_standardizer;
+CREATE EXTENSION IF NOT EXISTS address_standardizer_data_br;
+
+SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Augusta, 100', 'Sao Paulo, SP');
+SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Avenida Paulista, 1000 Apto 101', 'Sao Paulo, SP, 01310 100');
+SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rodovia dos Imigrantes, Km 50', 'Sao Paulo, SP');
+SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'SQS 308 Bloco B Apto 101', 'Brasilia, DF');
+SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Quadra 10 Lote 5', 'Goiania, GO');
+```
+
 
 # Development
 
@@ -110,7 +139,7 @@ SELECT *
 The `release.yml` GitHub Action defines a release-on-tag process.
 
 * Ensure the `NEWS.md` file is up-to-date and the release date is set to the current date.
-* Ensure that the version in `address_standardizer.control` and `address_standardizer_data_us.control` is set to the release version (eg `default_version = '3.7.1'`).
+* Ensure that the version in `address_standardizer.control`, `address_standardizer_data_us.control`, and `address_standardizer_data_br.control` is set to the release version (eg `default_version = '3.7.1'`).
 * Tag the repository with that version prefixed by `v` (`git tag v3.7.1 && git push origin v3.7.1`)
 
 The release will only build out with a clean build and matching tag/version numbers.
