@@ -61,6 +61,20 @@ def psql_base_cmd() -> list:
     container = os.getenv("POSTGRES_CONTAINER", "postgis_br")
     return ["docker", "exec", "-i", container, "psql", "-U", user, "-d", db]
 
+def get_target_ufs(uf_arg: str, all_flag: bool = False) -> list[str]:
+    """Resolves target UF list from CLI arguments (supports BR / ALL / comma-separated list)."""
+    if all_flag or (uf_arg and uf_arg.strip().upper() in ("BR", "ALL", "BRASIL")):
+        return sorted(list(UF_CODE_MAP.keys()))
+
+    ufs = [u.strip().upper() for u in uf_arg.split(",") if u.strip()]
+    if not ufs:
+        raise ValueError("Nenhuma UF informada. Forneça uma sigla (ex: SP, PA), uma lista (ex: SP,RJ) ou 'BR' para todos os estados.")
+
+    for u in ufs:
+        if u not in UF_CODE_MAP:
+            raise ValueError(f"UF inválida: '{u}'. Use uma sigla válida (ex: SP, RJ, MG) ou 'BR' / --all para o Brasil inteiro.")
+    return ufs
+
 def get_municipality_map() -> dict:
     """Fetches official IBGE code -> (Municipality Name, UF) mapping from IBGE API."""
     url = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
@@ -92,6 +106,8 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
     uf_upper = uf.upper()
     code = UF_CODE_MAP.get(uf_upper)
     if not code:
+        if uf_upper in ("BR", "ALL", "BRASIL"):
+            raise ValueError(f"O IBGE divide o CNEFE por estados. Use o importador com '--uf BR' ou '--all' para iterar por todas as 27 UFs.")
         raise ValueError(f"UF inválida: {uf}")
 
     filename = f"{code}_{uf_upper}.zip"
@@ -178,7 +194,12 @@ def ensure_tables_exist() -> None:
     """
     subprocess.run(psql_base_cmd() + ["-c", sql], check=True)
 
-def import_cnefe_to_postgres(zip_path: str, uf: str, limit: Optional[int] = None) -> None:
+def import_cnefe_to_postgres(
+    zip_path: str,
+    uf: str,
+    limit: Optional[int] = None,
+    muni_map: Optional[dict] = None
+) -> int:
     """Streams CSV data from zip file into PostgreSQL via staging table with COPY and builds spatial indexes."""
     uf_upper = uf.upper()
     if uf_upper not in UF_CODE_MAP:
@@ -198,7 +219,8 @@ def import_cnefe_to_postgres(zip_path: str, uf: str, limit: Optional[int] = None
                 "Execute sem --limit para atualizar o estado completo."
             )
 
-    muni_map = get_municipality_map()
+    if muni_map is None:
+        muni_map = get_municipality_map()
 
     print(f"Preparando importação para UF: {uf_upper}...")
     # Clean staging table before ingestion
@@ -314,7 +336,8 @@ def import_cnefe_to_postgres(zip_path: str, uf: str, limit: Optional[int] = None
     CREATE INDEX IF NOT EXISTS idx_cnefe_logr_trgm ON cnefe_enderecos USING GIN (logradouro gin_trgm_ops);
     """
     subprocess.run(psql_base_cmd() + ["-c", post_import_sql], check=True)
-    print("✅ Geometrias PostGIS e índices otimizados com sucesso!")
+    print(f"✅ Geometrias PostGIS e índices otimizados para {uf_upper} com sucesso!")
+    return count
 
 def main() -> None:
     """Main CLI entrypoint for CNEFE address importer."""
@@ -326,15 +349,61 @@ def main() -> None:
         else:
             default_dest = "./downloads_cnefe"
 
-    parser = argparse.ArgumentParser(description="Import CNEFE data for a Brazilian state into PostGIS.")
-    parser.add_argument("--uf", type=str, default="PA", help="Sigla da UF (ex: PA, SP, RJ, MG, SC).")
-    parser.add_argument("--dest", type=str, default=default_dest, help="Diretório de download para os arquivos ZIP do IBGE.")
-    parser.add_argument("--limit", type=int, default=None, help="Limite de linhas para teste.")
+    parser = argparse.ArgumentParser(description="Import CNEFE 2022 address and geocode datasets into PostGIS.")
+    parser.add_argument(
+        "--uf",
+        type=str,
+        default="PA",
+        help="Sigla da UF (ex: PA, SP, RJ), lista separada por vírgula (ex: SP,RJ,MG) ou 'BR' para o Brasil completo."
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Importa todos os 27 estados do Brasil sequencialmente."
+    )
+    parser.add_argument(
+        "--dest",
+        type=str,
+        default=default_dest,
+        help="Diretório de download para os arquivos ZIP do IBGE."
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Limite de linhas para teste por UF."
+    )
     args = parser.parse_args()
 
     os.makedirs(args.dest, exist_ok=True)
-    zip_path = download_cnefe(args.uf, args.dest)
-    import_cnefe_to_postgres(zip_path, args.uf, args.limit)
+    target_ufs = get_target_ufs(args.uf, args.all)
+
+    print("\n=================================================================")
+    print("🗺️  Importador IBGE CNEFE 2022 -> PostgreSQL/PostGIS")
+    print(f"📌  UFs selecionadas ({len(target_ufs)}): {', '.join(target_ufs)}")
+    print(f"📂  Pasta de download: {args.dest}")
+    if args.limit:
+        print(f"⚠️  Limite de teste: {args.limit:,} linhas por UF")
+    print("=================================================================\n")
+
+    # Fetch municipality map once for all UFs
+    muni_map = get_municipality_map()
+    total_start = time.time()
+    total_imported = 0
+
+    for idx, uf in enumerate(target_ufs, start=1):
+        print(f"\n[{idx}/{len(target_ufs)}] >>> Iniciando UF: {uf} <<<")
+        zip_path = download_cnefe(uf, args.dest)
+        count = import_cnefe_to_postgres(zip_path, uf, args.limit, muni_map=muni_map)
+        total_imported += count
+
+    total_elapsed = time.time() - total_start
+    print("\n=================================================================")
+    print("🎉 Importação CNEFE Concluída com Sucesso!")
+    print(f"📊 Total de UFs processadas: {len(target_ufs)}")
+    print(f"📍 Total de registros inseridos no PostGIS: {total_imported:,}")
+    print(f"⏱️  Tempo total: {total_elapsed:.1f}s ({total_elapsed/60:.1f} min)")
+    print("=================================================================\n")
 
 if __name__ == "__main__":
     main()
