@@ -69,7 +69,6 @@ INSERT INTO br_rules (rule) VALUES ('2 0 19 18 19 0 -1 4 5 16 17 16 17 -1 1 17')
 INSERT INTO br_rules (rule) VALUES ('2 0 19 1 19 0 -1 4 5 16 17 16 17 -1 1 17');
 INSERT INTO br_rules (rule) VALUES ('2 0 19 0 19 0 -1 4 5 16 17 16 17 -1 1 17');
 INSERT INTO br_rules (rule) VALUES ('19 0 19 0 -1 16 17 16 17 -1 1 15');
-INSERT INTO br_rules (rule) VALUES ('2 0 19 0 -1 4 5 16 17 -1 1 15');
 INSERT INTO br_rules (rule) VALUES ('1 -1 5 -1 1 5');
 INSERT INTO br_rules (rule) VALUES ('1 1 -1 5 5 -1 1 5');
 INSERT INTO br_rules (rule) VALUES ('1 1 1 -1 5 5 5 -1 1 5');
