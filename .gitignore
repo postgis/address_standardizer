@@ -10,3 +10,7 @@ test/results/*.out
 test/results/*.diff
 *.tar.gz
 .DS_Store
+.env
+.env.*
+!.env.example
+.pgdata/
