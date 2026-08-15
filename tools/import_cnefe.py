@@ -2,25 +2,45 @@
 """
 IBGE CNEFE 2022 Address & Geocode Importer for PostgreSQL/PostGIS.
 
-This tool downloads or parses official CNEFE (Cadastro Nacional de Endereços para
-Fins Estatísticos - Censo 2022) open datasets from IBGE and loads them into
-a PostGIS table with spatial geometry (Point, 4326) and search indexes.
-
-Usage:
-  python3 tools/import_cnefe.py --help
-  python3 tools/import_cnefe.py --uf SP --limit 10000
-  python3 tools/import_cnefe.py --file /path/to/cnefe_SP.csv
+Downloads official CNEFE (Censo Demográfico 2022) open datasets from IBGE,
+processes addresses and GPS coordinates, and loads them directly into PostGIS.
 """
 
 import argparse
 import csv
 import gzip
 import io
+import json
 import os
+import subprocess
 import sys
-import urllib.request
+import time
 import unicodedata
+import urllib.request
 import zipfile
+
+# Carrega variáveis do arquivo .env se existir
+def load_env():
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    k = k.strip()
+                    v = v.strip().strip("'").strip('"')
+                    if k not in os.environ:
+                        os.environ[k] = v
+
+load_env()
+
+UF_CODE_MAP = {
+    "RO": "11", "AC": "12", "AM": "13", "RR": "14", "PA": "15", "AP": "16", "TO": "17",
+    "MA": "21", "PI": "22", "CE": "23", "RN": "24", "PB": "25", "PE": "26", "AL": "27",
+    "SE": "28", "BA": "29", "MG": "31", "ES": "32", "RJ": "33", "SP": "35", "PR": "41",
+    "SC": "42", "RS": "43", "MS": "50", "MT": "51", "GO": "52", "DF": "53"
+}
 
 def remove_accents(input_str: str) -> str:
     if not input_str:
@@ -28,62 +48,205 @@ def remove_accents(input_str: str) -> str:
     nfkd = unicodedata.normalize('NFKD', input_str)
     return "".join([c for c in nfkd if not unicodedata.combining(c)]).upper().strip()
 
-CREATE_TABLE_SQL = """
-CREATE EXTENSION IF NOT EXISTS postgis;
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+def get_municipality_map():
+    """Obtém o mapeamento oficial de código IBGE -> (Nome do Município, UF) da API do IBGE."""
+    url = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+    print("Obtendo lista oficial de municípios do IBGE...")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read()
+            if raw[:2] == b'\x1f\x8b':
+                raw = gzip.decompress(raw)
+            data = json.loads(raw.decode('utf-8'))
+            muni_map = {}
+            for item in data:
+                muni_id = item["id"]
+                name = remove_accents(item["nome"])
+                uf = ""
+                if item.get("microrregiao"):
+                    uf = item["microrregiao"]["mesorregiao"]["UF"]["sigla"]
+                elif item.get("regiao-imediata"):
+                    uf = item["regiao-imediata"]["regiao-intermediaria"]["UF"]["sigla"]
+                muni_map[muni_id] = (name, uf)
+            print(f"✅ {len(muni_map):,} municípios mapeados com sucesso.")
+            return muni_map
+    except Exception as e:
+        print(f"⚠️ Aviso: Não foi possível consultar a API do IBGE ({e}). Usando fallback.")
+        return {}
 
-CREATE TABLE IF NOT EXISTS cnefe_enderecos (
-    id bigserial PRIMARY KEY,
-    cod_municipio_ibge integer NOT NULL,
-    municipio text NOT NULL,
-    uf varchar(2) NOT NULL,
-    tipo text,
-    logradouro text NOT NULL,
-    numero text,
-    complemento text,
-    bairro text,
-    cep varchar(9),
-    latitude double precision,
-    longitude double precision,
-    geom geometry(Point, 4326)
-);
-
-CREATE INDEX IF NOT EXISTS idx_cnefe_lookup ON cnefe_enderecos (uf, municipio, logradouro, numero);
-CREATE INDEX IF NOT EXISTS idx_cnefe_cep ON cnefe_enderecos (cep);
-CREATE INDEX IF NOT EXISTS idx_cnefe_geom ON cnefe_enderecos USING GIST (geom);
-CREATE INDEX IF NOT EXISTS idx_cnefe_logr_trgm ON cnefe_enderecos USING GIN (logradouro gin_trgm_ops);
-"""
-
-def get_ibge_cnefe_url(uf: str) -> str:
-    """Returns the official IBGE public download URL for the given state CNEFE zip."""
+def download_cnefe(uf: str, dest_dir: str) -> str:
     uf_upper = uf.upper()
-    return f"https://ftp.ibge.gov.br/organizacao_do_territorio/estrutura_territorial/cadastro_nacional_de_enderecos_para_fins_estatisticos/censo2022/arquivos_csv/{uf_upper}.zip"
+    code = UF_CODE_MAP.get(uf_upper)
+    if not code:
+        raise ValueError(f"UF inválida: {uf}")
+
+    filename = f"{code}_{uf_upper}.zip"
+    dest_path = os.path.join(dest_dir, filename)
+
+    if os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000000:
+        print(f"Arquivo já existe em cache: {dest_path} ({os.path.getsize(dest_path)/(1024*1024):.2f} MB)")
+        return dest_path
+
+    url = f"https://ftp.ibge.gov.br/Cadastro_Nacional_de_Enderecos_para_Fins_Estatisticos/Censo_Demografico_2022/Arquivos_CNEFE/CSV/UF/{filename}"
+    print(f"Baixando CNEFE oficial do IBGE para {uf_upper}: {url}")
+    print(f"Destino local: {dest_path}")
+
+    start_time = time.time()
+    req = urllib.request.Request(url, headers={'User-Agent': 'PostGIS-CNEFE-Importer/1.0'})
+    with urllib.request.urlopen(req, timeout=120) as response, open(dest_path, "wb") as out_file:
+        total_size = int(response.headers.get('Content-Length', 0))
+        downloaded = 0
+        chunk_size = 1024 * 1024
+        
+        while True:
+            chunk = response.read(chunk_size)
+            if not chunk:
+                break
+            out_file.write(chunk)
+            downloaded += len(chunk)
+            if total_size > 0:
+                percent = (downloaded / total_size) * 100
+                mb_down = downloaded / (1024 * 1024)
+                mb_total = total_size / (1024 * 1024)
+                print(f"\rProgresso do Download: {percent:.1f}% ({mb_down:.1f}/{mb_total:.1f} MB)", end="", flush=True)
+
+    elapsed = time.time() - start_time
+    print(f"\n✅ Download concluído em {elapsed:.1f}s ({os.path.getsize(dest_path)/(1024*1024):.2f} MB).")
+    return dest_path
+
+def ensure_tables_exist():
+    """Garante que a tabela e extensões existam no PostgreSQL."""
+    sql = """
+    CREATE EXTENSION IF NOT EXISTS postgis;
+    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+    CREATE TABLE IF NOT EXISTS cnefe_enderecos (
+        id bigserial PRIMARY KEY,
+        cod_municipio_ibge integer NOT NULL,
+        municipio text,
+        uf varchar(2) NOT NULL,
+        tipo text,
+        titulo text,
+        logradouro text NOT NULL,
+        numero text,
+        modificador text,
+        bairro text,
+        cep varchar(9),
+        latitude double precision,
+        longitude double precision,
+        geom geometry(Point, 4326)
+    );
+    """
+    subprocess.run([
+        "docker", "exec", "-i", "postgis_br", "psql", "-U", os.getenv("POSTGRES_USER", "postgres"),
+        "-d", os.getenv("POSTGRES_DB", "address_db"), "-c", sql
+    ], check=True)
+
+def import_cnefe_to_postgres(zip_path: str, uf: str, limit: int = None):
+    ensure_tables_exist()
+    muni_map = get_municipality_map()
+    uf_upper = uf.upper()
+
+    print(f"Lendo e transmitindo dados de {zip_path}...")
+    with zipfile.ZipFile(zip_path, 'r') as z:
+        csv_filename = [name for name in z.namelist() if name.endswith('.csv')][0]
+        print(f"Arquivo CSV interno: {csv_filename}")
+        
+        psql_cmd = [
+            "docker", "exec", "-i", "postgis_br", "psql", "-U", os.getenv("POSTGRES_USER", "postgres"),
+            "-d", os.getenv("POSTGRES_DB", "address_db"),
+            "-c", "COPY cnefe_enderecos (cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro, numero, modificador, bairro, cep, latitude, longitude) FROM STDIN WITH (FORMAT csv, DELIMITER E'\\t', NULL '');"
+        ]
+
+        proc = subprocess.Popen(psql_cmd, stdin=subprocess.PIPE, text=True, bufsize=65536)
+        
+        start_time = time.time()
+        count = 0
+        
+        with z.open(csv_filename, 'r') as raw_file:
+            text_stream = io.TextIOWrapper(raw_file, encoding='utf-8', errors='ignore')
+            reader = csv.DictReader(text_stream, delimiter=';')
+            
+            for row in reader:
+                try:
+                    cod_muni = int(row.get("COD_MUNICIPIO", 0))
+                except ValueError:
+                    continue
+                
+                muni_info = muni_map.get(cod_muni, ("", uf_upper))
+                municipio = muni_info[0]
+                
+                tipo = remove_accents(row.get("NOM_TIPO_SEGLOGR", ""))
+                titulo = remove_accents(row.get("NOM_TITULO_SEGLOGR", ""))
+                logr_base = remove_accents(row.get("NOM_SEGLOGR", ""))
+                
+                if titulo:
+                    logradouro = f"{titulo} {logr_base}".strip()
+                else:
+                    logradouro = logr_base
+                
+                numero = row.get("NUM_ENDERECO", "").strip()
+                modificador = row.get("DSC_MODIFICADOR", "").strip()
+                bairro = remove_accents(row.get("DSC_LOCALIDADE", ""))
+                cep = row.get("CEP", "").strip()
+                
+                lat_str = row.get("LATITUDE", "").replace(",", ".").strip()
+                lon_str = row.get("LONGITUDE", "").replace(",", ".").strip()
+                
+                tsv_line = f"{cod_muni}\t{municipio}\t{uf_upper}\t{tipo}\t{titulo}\t{logradouro}\t{numero}\t{modificador}\t{bairro}\t{cep}\t{lat_str}\t{lon_str}\n"
+                proc.stdin.write(tsv_line)
+                count += 1
+                
+                if count % 100000 == 0:
+                    elapsed = time.time() - start_time
+                    speed = count / elapsed if elapsed > 0 else 0
+                    print(f"\rProcessando e inserindo: {count:,} linhas ({speed:.0f} linhas/s)...", end="", flush=True)
+                
+                if limit and count >= limit:
+                    break
+        
+        proc.stdin.close()
+        proc.wait()
+        
+        elapsed = time.time() - start_time
+        print(f"\n✅ Total inserido no banco: {count:,} registros em {elapsed:.1f}s.")
+
+    print("\nAtualizando geometrias espaciais PostGIS e criando índices...")
+    post_import_sql = """
+    UPDATE cnefe_enderecos 
+    SET geom = ST_SetSRID(ST_Point(longitude, latitude), 4326) 
+    WHERE geom IS NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;
+    
+    CREATE INDEX IF NOT EXISTS idx_cnefe_lookup ON cnefe_enderecos (uf, municipio, logradouro, numero);
+    CREATE INDEX IF NOT EXISTS idx_cnefe_cep ON cnefe_enderecos (cep);
+    CREATE INDEX IF NOT EXISTS idx_cnefe_geom ON cnefe_enderecos USING GIST (geom);
+    CREATE INDEX IF NOT EXISTS idx_cnefe_logr_trgm ON cnefe_enderecos USING GIN (logradouro gin_trgm_ops);
+    """
+    subprocess.run([
+        "docker", "exec", "-i", "postgis_br", "psql", "-U", os.getenv("POSTGRES_USER", "postgres"),
+        "-d", os.getenv("POSTGRES_DB", "address_db"), "-c", post_import_sql
+    ], check=True)
+    print("✅ Geometrias PostGIS e índices otimizados com sucesso!")
 
 def main():
-    parser = argparse.ArgumentParser(description="Import IBGE CNEFE address and GPS coordinate data into PostGIS.")
-    parser.add_argument("--uf", type=str, default="SP", help="Brazilian State abbreviation (e.g. SP, RJ, MG, SC).")
-    parser.add_argument("--file", type=str, default=None, help="Path to local CNEFE CSV, ZIP, or GZ file.")
-    parser.add_argument("--db", type=str, default=os.getenv("POSTGRES_DB", "address_db"), help="Database name.")
-    parser.add_argument("--user", type=str, default=os.getenv("POSTGRES_USER", "postgres"), help="Database user.")
-    parser.add_argument("--host", type=str, default=os.getenv("POSTGRES_HOST", "localhost"), help="Database host.")
-    parser.add_argument("--port", type=str, default=os.getenv("POSTGRES_PORT", "5432"), help="Database port.")
-    parser.add_argument("--limit", type=int, default=None, help="Limit number of rows to import (useful for testing).")
-    parser.add_argument("--print-schema-only", action="store_true", help="Print table schema SQL and exit.")
+    default_dest = os.getenv("CNEFE_DOWNLOAD_DIR")
+    if not default_dest:
+        pg_data = os.getenv("POSTGRES_DATA_DIR", "./.pgdata")
+        if "/Volumes/" in pg_data:
+            default_dest = os.path.join(os.path.dirname(pg_data), "downloads_cnefe")
+        else:
+            default_dest = "./downloads_cnefe"
 
+    parser = argparse.ArgumentParser(description="Import CNEFE data for a Brazilian state into PostGIS.")
+    parser.add_argument("--uf", type=str, default="PA", help="Sigla da UF (ex: PA, SP, RJ, MG, SC).")
+    parser.add_argument("--dest", type=str, default=default_dest, help="Diretório de download para os arquivos ZIP do IBGE.")
+    parser.add_argument("--limit", type=int, default=None, help="Limite de linhas para teste.")
     args = parser.parse_args()
 
-    if args.print_schema_only:
-        print(CREATE_TABLE_SQL)
-        return
-
-    print("================================================================")
-    print(f"IBGE CNEFE 2022 PostGIS Geocoding Importer")
-    print(f"Target Database: {args.user}@{args.host}:{args.port}/{args.db}")
-    print(f"Target UF: {args.uf.upper()}")
-    print("================================================================")
-    print("To execute schema creation directly in your database, run:")
-    print(f'  docker exec -i postgis_br psql -U {args.user} -d {args.db} -c "{CREATE_TABLE_SQL}"')
-    print("================================================================")
+    os.makedirs(args.dest, exist_ok=True)
+    zip_path = download_cnefe(args.uf, args.dest)
+    import_cnefe_to_postgres(zip_path, args.uf, args.limit)
 
 if __name__ == "__main__":
     main()
