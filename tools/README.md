@@ -41,7 +41,7 @@ python3 tools/import_cnefe.py --uf RJ
 python3 tools/import_cnefe.py --uf SP --limit 5000
 
 # 3. Especificar uma pasta personalizada para guardar os downloads do IBGE
-python3 tools/import_cnefe.py --uf MG --dest /Volumes/240/downloads_cnefe
+python3 tools/import_cnefe.py --uf MG --dest ./downloads_cnefe
 ```
 
 ---
@@ -55,6 +55,9 @@ POSTGRES_DB=address_db
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 POSTGRES_PORT=5432
-POSTGRES_DATA_DIR=/Volumes/240/postgres_postgis_data
-CNEFE_DOWNLOAD_DIR=/Volumes/240/downloads_cnefe
+
+# Diretórios de armazenamento (podem apontar para disco local ou volume externo)
+POSTGRES_DATA_DIR=./.pgdata
+CNEFE_DOWNLOAD_DIR=./downloads_cnefe
 ```
+
