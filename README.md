@@ -85,6 +85,26 @@ The extension supports datasets for different countries:
 > 
 > *No proprietary or copyrighted postal databases (such as Empresa Brasileira de Correios e Telégrafos - DNE) are used.*
 
+---
+
+## Architecture: Parser vs Reference Geocoder
+
+A complete offline geocoding system in PostGIS operates in two complementary stages:
+
+1. **Address Standardizer (`address_standardizer`):**
+   * Parses and normalizes freeform input text (handling abbreviations, casing, word orders, and missing commas).
+   * Fast, lightweight (~1 MB), and bundled directly into PostGIS.
+2. **Reference Geocoding Database (e.g. IBGE CNEFE / OpenStreetMap):**
+   * Stores the physical ground-truth database containing millions of address points, official Postal Codes (CEP), and exact GPS coordinates (`Point(4326)`).
+
+```
+[Raw User Address] ──> [standardize_address()] ──> [SQL Query / Trigram / KNN] ──> [GPS Latitude & Longitude + CEP]
+```
+
+📖 **Detailed Step-by-Step Guide:** For table schemas, SQL fuzzy search queries, and import instructions, see [docs/geocodificador_cnefe_brasil.md](docs/geocodificador_cnefe_brasil.md).
+
+---
+
 ## Test and Try
 
 ### United States (US)
