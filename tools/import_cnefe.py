@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 import time
+from typing import Optional
 import unicodedata
 import urllib.request
 import zipfile
@@ -48,6 +49,17 @@ def remove_accents(input_str: str) -> str:
         return ""
     nfkd = unicodedata.normalize('NFKD', input_str)
     return "".join([c for c in nfkd if not unicodedata.combining(c)]).upper().strip()
+
+def psql_base_cmd() -> list:
+    """Returns the base command list for executing psql commands via Docker or directly."""
+    user = os.getenv("POSTGRES_USER", "postgres")
+    db = os.getenv("POSTGRES_DB", "address_db")
+    host = os.getenv("POSTGRES_HOST")
+    port = os.getenv("POSTGRES_PORT", "5432")
+    if host:
+        return ["psql", "-h", host, "-p", port, "-U", user, "-d", db]
+    container = os.getenv("POSTGRES_CONTAINER", "postgis_br")
+    return ["docker", "exec", "-i", container, "psql", "-U", user, "-d", db]
 
 def get_municipality_map() -> dict:
     """Fetches official IBGE code -> (Municipality Name, UF) mapping from IBGE API."""
@@ -114,6 +126,11 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
                 print(f"\rProgresso do Download: {percent:.1f}% ({mb_down:.1f}/{mb_total:.1f} MB)", end="", flush=True)
 
     if total_size > 0 and downloaded < total_size:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
         raise IOError(f"Download truncado para {uf_upper}: recebidos {downloaded} bytes de {total_size} bytes esperados.")
 
     os.replace(tmp_path, dest_path)
@@ -122,7 +139,7 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
     return dest_path
 
 def ensure_tables_exist() -> None:
-    """Ensures that the cnefe_enderecos table and required extensions exist in PostgreSQL."""
+    """Ensures that the cnefe_enderecos table, staging table, and required extensions exist in PostgreSQL."""
     sql = """
     CREATE EXTENSION IF NOT EXISTS postgis;
     CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -143,39 +160,63 @@ def ensure_tables_exist() -> None:
         longitude double precision,
         geom geometry(Point, 4326)
     );
-    """
-    subprocess.run([
-        "docker", "exec", "-i", "postgis_br", "psql", "-U", os.getenv("POSTGRES_USER", "postgres"),
-        "-d", os.getenv("POSTGRES_DB", "address_db"), "-c", sql
-    ], check=True)
 
-def import_cnefe_to_postgres(zip_path: str, uf: str, limit: int = None) -> None:
-    """Streams CSV data from zip file into PostgreSQL with COPY and builds spatial indexes."""
+    CREATE UNLOGGED TABLE IF NOT EXISTS cnefe_stage (
+        cod_municipio_ibge integer NOT NULL,
+        municipio text,
+        uf varchar(2) NOT NULL,
+        tipo text,
+        titulo text,
+        logradouro text NOT NULL,
+        numero text,
+        modificador text,
+        bairro text,
+        cep varchar(9),
+        latitude double precision,
+        longitude double precision
+    );
+    """
+    subprocess.run(psql_base_cmd() + ["-c", sql], check=True)
+
+def import_cnefe_to_postgres(zip_path: str, uf: str, limit: Optional[int] = None) -> None:
+    """Streams CSV data from zip file into PostgreSQL via staging table with COPY and builds spatial indexes."""
     uf_upper = uf.upper()
     if uf_upper not in UF_CODE_MAP:
         raise ValueError(f"UF inválida: {uf}")
 
     ensure_tables_exist()
+
+    # Reject partial --limit if the target UF already contains complete data
+    if limit is not None:
+        count_cmd = psql_base_cmd() + ["-t", "-A", "-c", f"SELECT count(*) FROM cnefe_enderecos WHERE uf = '{uf_upper}';"]
+        res = subprocess.run(count_cmd, capture_output=True, text=True, check=True)
+        existing_count = int(res.stdout.strip() or 0)
+        if existing_count > 0:
+            raise ValueError(
+                f"A UF '{uf_upper}' já possui {existing_count:,} registros no banco. "
+                "Substituição parcial com --limit foi rejeitada para evitar perda de dados existentes. "
+                "Execute sem --limit para atualizar o estado completo."
+            )
+
     muni_map = get_municipality_map()
 
     print(f"Preparando importação para UF: {uf_upper}...")
-    # Idempotent replacement for this UF
-    subprocess.run([
-        "docker", "exec", "-i", "postgis_br", "psql", "-U", os.getenv("POSTGRES_USER", "postgres"),
-        "-d", os.getenv("POSTGRES_DB", "address_db"),
-        "-c", f"DELETE FROM cnefe_enderecos WHERE uf = '{uf_upper}';"
-    ], check=True)
+    # Clean staging table before ingestion
+    subprocess.run(psql_base_cmd() + ["-c", "TRUNCATE cnefe_stage;"], check=True)
 
     print(f"Lendo e transmitindo dados de {zip_path}...")
     with zipfile.ZipFile(zip_path, 'r') as z:
-        csv_filename = [name for name in z.namelist() if name.endswith('.csv')][0]
+        csv_filename = next((name for name in z.namelist() if name.endswith('.csv')), None)
+        if not csv_filename:
+            raise FileNotFoundError(f"Nenhum arquivo CSV encontrado dentro do arquivo ZIP: {zip_path}")
         print(f"Arquivo CSV interno: {csv_filename}")
         
-        psql_cmd = [
-            "docker", "exec", "-i", "postgis_br", "psql", "-U", os.getenv("POSTGRES_USER", "postgres"),
-            "-d", os.getenv("POSTGRES_DB", "address_db"),
-            "-c", "COPY cnefe_enderecos (cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro, numero, modificador, bairro, cep, latitude, longitude) FROM STDIN WITH (FORMAT csv, DELIMITER E'\\t', NULL '');"
-        ]
+        copy_sql = (
+            "COPY cnefe_stage (cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro, "
+            "numero, modificador, bairro, cep, latitude, longitude) FROM STDIN "
+            "WITH (FORMAT csv, DELIMITER E'\\t', QUOTE '\"', ESCAPE '\"', NULL '');"
+        )
+        psql_cmd = psql_base_cmd() + ["-c", copy_sql]
 
         proc = subprocess.Popen(psql_cmd, stdin=subprocess.PIPE, text=True, bufsize=65536)
         tsv_writer = csv.writer(proc.stdin, delimiter='\t', lineterminator='\n', quoting=csv.QUOTE_MINIMAL)
@@ -188,25 +229,30 @@ def import_cnefe_to_postgres(zip_path: str, uf: str, limit: int = None) -> None:
             reader = csv.DictReader(text_stream, delimiter=';')
             
             for row in reader:
+                cod_muni_str = row.get("COD_MUNICIPIO", "").strip()
+                if not cod_muni_str:
+                    continue
                 try:
-                    cod_muni = int(row.get("COD_MUNICIPIO", 0))
+                    cod_muni = int(cod_muni_str)
                 except ValueError:
                     continue
+                if not cod_muni:
+                    continue
+                
+                logr_base = remove_accents(row.get("NOM_SEGLOGR", ""))
+                if not logr_base:
+                    continue  # Filter out records without a street name
                 
                 muni_info = muni_map.get(cod_muni, ("", uf_upper))
                 municipio = muni_info[0]
                 
                 tipo = remove_accents(row.get("NOM_TIPO_SEGLOGR", ""))
                 titulo = remove_accents(row.get("NOM_TITULO_SEGLOGR", ""))
-                logr_base = remove_accents(row.get("NOM_SEGLOGR", ""))
                 
                 if titulo:
                     logradouro = f"{titulo} {logr_base}".strip()
                 else:
                     logradouro = logr_base
-                
-                if not logradouro:
-                    logradouro = "SEM DENOMINACAO"
                 
                 numero = row.get("NUM_ENDERECO", "").strip()
                 modificador = row.get("DSC_MODIFICADOR", "").strip()
@@ -234,12 +280,28 @@ def import_cnefe_to_postgres(zip_path: str, uf: str, limit: int = None) -> None:
         return_code = proc.wait()
         if return_code != 0:
             raise subprocess.CalledProcessError(return_code, psql_cmd)
-
         
         elapsed = time.time() - start_time
-        print(f"\n✅ Total inserido no banco: {count:,} registros em {elapsed:.1f}s.")
+        print(f"\n✅ Total inserido em staging: {count:,} registros em {elapsed:.1f}s.")
 
-    print("\nAtualizando geometrias espaciais PostGIS e criando índices...")
+    print(f"\nAplicando transação atômica para substituir dados da UF: {uf_upper}...")
+    atomic_swap_sql = f"""
+    BEGIN;
+    DELETE FROM cnefe_enderecos WHERE uf = '{uf_upper}';
+    INSERT INTO cnefe_enderecos (
+        cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro,
+        numero, modificador, bairro, cep, latitude, longitude
+    )
+    SELECT
+        cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro,
+        numero, modificador, bairro, cep, latitude, longitude
+    FROM cnefe_stage WHERE uf = '{uf_upper}';
+    TRUNCATE cnefe_stage;
+    COMMIT;
+    """
+    subprocess.run(psql_base_cmd() + ["-c", atomic_swap_sql], check=True)
+
+    print("Atualizando geometrias espaciais PostGIS e criando índices...")
     post_import_sql = f"""
     UPDATE cnefe_enderecos 
     SET geom = ST_SetSRID(ST_Point(longitude, latitude), 4326) 
@@ -248,12 +310,10 @@ def import_cnefe_to_postgres(zip_path: str, uf: str, limit: int = None) -> None:
     CREATE INDEX IF NOT EXISTS idx_cnefe_lookup ON cnefe_enderecos (uf, municipio, logradouro, numero);
     CREATE INDEX IF NOT EXISTS idx_cnefe_cep ON cnefe_enderecos (cep);
     CREATE INDEX IF NOT EXISTS idx_cnefe_geom ON cnefe_enderecos USING GIST (geom);
+    CREATE INDEX IF NOT EXISTS idx_cnefe_geog ON cnefe_enderecos USING GIST ((geom::geography));
     CREATE INDEX IF NOT EXISTS idx_cnefe_logr_trgm ON cnefe_enderecos USING GIN (logradouro gin_trgm_ops);
     """
-    subprocess.run([
-        "docker", "exec", "-i", "postgis_br", "psql", "-U", os.getenv("POSTGRES_USER", "postgres"),
-        "-d", os.getenv("POSTGRES_DB", "address_db"), "-c", post_import_sql
-    ], check=True)
+    subprocess.run(psql_base_cmd() + ["-c", post_import_sql], check=True)
     print("✅ Geometrias PostGIS e índices otimizados com sucesso!")
 
 def main() -> None:

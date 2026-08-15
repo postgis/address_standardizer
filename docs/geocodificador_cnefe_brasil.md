@@ -66,6 +66,9 @@ CREATE INDEX IF NOT EXISTS idx_cnefe_cep
 CREATE INDEX IF NOT EXISTS idx_cnefe_geom 
     ON cnefe_enderecos USING GIST (geom);
 
+CREATE INDEX IF NOT EXISTS idx_cnefe_geog 
+    ON cnefe_enderecos USING GIST ((geom::geography));
+
 -- 4. Índice para busca fonética / tolerância a erros de digitação (Fuzzy Search)
 CREATE INDEX IF NOT EXISTS idx_cnefe_logr_trgm 
     ON cnefe_enderecos USING GIN (logradouro gin_trgm_ops);
@@ -154,7 +157,7 @@ SELECT
     c.cep,
     ST_Distance(c.geom::geography, ST_SetSRID(ST_Point(-46.6521, -23.5532), 4326)::geography) AS distancia_metros
 FROM cnefe_enderecos c
-ORDER BY c.geom <-> ST_SetSRID(ST_Point(-46.6521, -23.5532), 4326) -- Busca ultra-rápida por KNN GiST
+ORDER BY c.geom::geography <-> ST_SetSRID(ST_Point(-46.6521, -23.5532), 4326)::geography -- Busca ultra-rápida por KNN GiST em geografia (metros)
 LIMIT 1;
 ```
 
