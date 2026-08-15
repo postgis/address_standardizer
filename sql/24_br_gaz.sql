@@ -1681,6 +1681,8 @@ WITH t(seq,word,stdword,token) AS ( VALUES
 (1, 'BOZANO', 'BOZANO', 10),
 (2, 'BOZANO', 'BOZANO', 1),
 (1, 'BR', 'BRASIL', 12),
+(2, 'BR', 'BR', 1),
+(3, 'BR', 'BR', 6),
 (1, 'BRACO DO NORTE', 'BRACO DO NORTE', 10),
 (2, 'BRACO DO NORTE', 'BRACO DO NORTE', 1),
 (1, 'BRACO DO TROMBUDO', 'BRACO DO TROMBUDO', 10),
