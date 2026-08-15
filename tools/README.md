@@ -33,15 +33,23 @@ Baixa os dados abertos de endereços e coordenadas GPS do **Censo 2022 do IBGE**
 ### Exemplos de Uso:
 
 ```bash
-# 1. Importar um estado completo (Ex: Pará, São Paulo, Rio de Janeiro)
+# 1. Importar um estado completo (Ex: Amapá, Pará, São Paulo)
+python3 tools/import_cnefe.py --uf AP
 python3 tools/import_cnefe.py --uf PA
 python3 tools/import_cnefe.py --uf SP
-python3 tools/import_cnefe.py --uf RJ
 
-# 2. Testar importando apenas os primeiros 5.000 registros
+# 2. Importar múltiplos estados específicos em sequência
+python3 tools/import_cnefe.py --uf SP,RJ,MG
+
+# 3. Importar o Brasil completo (todos os 27 estados do Censo 2022)
+python3 tools/import_cnefe.py --uf BR
+# ou
+python3 tools/import_cnefe.py --all
+
+# 4. Testar importando apenas os primeiros 5.000 registros por estado
 python3 tools/import_cnefe.py --uf SP --limit 5000
 
-# 3. Especificar uma pasta personalizada para guardar os downloads do IBGE
+# 5. Especificar uma pasta personalizada para guardar os downloads do IBGE
 python3 tools/import_cnefe.py --uf MG --dest ./downloads_cnefe
 ```
 

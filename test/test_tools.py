@@ -177,6 +177,23 @@ class TestImportCnefe(unittest.TestCase):
                 tmp_file = os.path.join(temp_dir, "15_PA.zip.tmp")
                 self.assertFalse(os.path.exists(tmp_file))
 
+    def test_get_target_ufs(self):
+        """Verify parsing of single UF, multiple comma-separated UFs, and BR/ALL."""
+        self.assertEqual(import_cnefe.get_target_ufs("SP"), ["SP"])
+        self.assertEqual(import_cnefe.get_target_ufs("sp, rj, mg"), ["SP", "RJ", "MG"])
+        
+        all_ufs = import_cnefe.get_target_ufs("BR")
+        self.assertEqual(len(all_ufs), 27)
+        self.assertIn("SP", all_ufs)
+        self.assertIn("AP", all_ufs)
+        self.assertIn("DF", all_ufs)
+
+        all_ufs_flag = import_cnefe.get_target_ufs("SP", all_flag=True)
+        self.assertEqual(len(all_ufs_flag), 27)
+
+        with self.assertRaises(ValueError):
+            import_cnefe.get_target_ufs("INVALID_UF")
+
 
 if __name__ == "__main__":
     unittest.main()
