@@ -317,8 +317,9 @@ import re
 import gzip
 
 def fetch_ibge_municipalities():
-    """Fetches all 5,570 Brazilian municipalities from the official IBGE Open Data API."""
+    """Fetches all 5,571 Brazilian municipalities from the official IBGE Open Data API."""
     url = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
+
     print(f"Fetching IBGE municipalities from {url}...")
     try:
         req = urllib.request.Request(url, headers={
