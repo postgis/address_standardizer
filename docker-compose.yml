@@ -3,15 +3,16 @@ services:
     image: postgis/postgis:15-3.3
     container_name: postgis_br
     environment:
-      POSTGRES_DB: address_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-address_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      # Armazenamento persistente no volume externo /Volumes/240
-      - /Volumes/240/postgres_postgis_data:/var/lib/postgresql/data
-      # Scripts SQL do repositório
+      # Armazenamento configuravel via POSTGRES_DATA_DIR (.env) ou fallback para ./.pgdata
+      - ${POSTGRES_DATA_DIR:-./.pgdata}:/var/lib/postgresql/data
+      # Scripts SQL do repositorio
       - ./sql:/sql:ro
       - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     restart: unless-stopped
+
