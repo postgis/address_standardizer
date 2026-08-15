@@ -164,4 +164,4 @@ O IBGE disponibiliza os arquivos de todos os estados do Brasil publicamente e se
 * **Portal de Geociências do IBGE:** [CNEFE - Censo Demográfico 2022](https://www.ibge.gov.br/geociencias/organizacao-do-territorio/estrutura-territorial/27533-cadastro-nacional-de-enderecos-para-fins-estatisticos.html)
 * **FTP Público:** `ftp://geoftp.ibge.gov.br/organizacao_do_territorio/estrutura_territorial/cadastro_nacional_de_enderecos_para_fins_estatisticos/censo2022/`
 
-Você pode utilizar o script [`tools/import_cnefe.py`](file:///Users/ruy/Code/cepBRpostgis/tools/import_cnefe.py) para baixar e importar automaticamente os dados do estado desejado diretamente no PostGIS.
+Você pode utilizar o script [`tools/import_cnefe.py`](../tools/import_cnefe.py) para baixar e importar automaticamente os dados do estado desejado diretamente no PostGIS.
