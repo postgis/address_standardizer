@@ -17,7 +17,7 @@ This is a PostgreSQL extension, and building it requires the PostgresSQL server 
 * Check access to the `pg_config` program on your path
 * Install [libpcre2](https://github.com/PCRE2Project/pcre2) and headers
 
-```
+```bash
 # debian
 sudo apt install libpcre2-dev libpcre2-8-0 libpcre2-posix2
 
@@ -30,7 +30,7 @@ brew install pcre2
 
 With the correct libraries installed and `pg_config` on the path, building with `make` should work out of the box. If it fails, you may need to edit the Makefile to specify your `pg_config` or `pcre2` locations.
 
-```
+```bash
 make
 sudo make install
 ```
@@ -39,7 +39,7 @@ sudo make install
 
 For a self-contained regression run against the freshly built extension, use:
 
-```
+```bash
 make -j check
 ```
 
@@ -50,21 +50,21 @@ newer because it relies on `extension_control_path`.
 If you want to inspect the temporary cluster after a failure, keep the scratch
 artifacts with:
 
-```
+```bash
 KEEP_CHECK_ARTIFACTS=1 make check
 ```
 
 On older PostgreSQL versions, fall back to the traditional flow against an
 existing server:
 
-```
+```bash
 make
 sudo make install
 make installcheck
 ```
 
 Once build and installed, you can activate the extension with `CREATE EXTENSION`.
-```
+```bash
 createdb address_db
 psql -d address_db -c "CREATE EXTENSION address_standardizer"
 ```
@@ -95,7 +95,7 @@ A complete offline geocoding system in PostGIS operates in two complementary sta
    * Parses and normalizes freeform input text (handling abbreviations, casing, word orders, and missing commas).
    * Fast, lightweight (~1 MB), and bundled directly into PostGIS.
 2. **Reference Geocoding Database (e.g. IBGE CNEFE / OpenStreetMap):**
-   * Stores the physical ground-truth database containing millions of address points, official Postal Codes (CEP), and GPS coordinates (`Point(4326)` where mapped by census operations).
+   * Stores the physical ground-truth database containing millions of address points, official Postal Codes (CEP), and GPS coordinates (`Point(4326)`). These values are populated when supplied by CNEFE, and may be missing or approximate depending on census coverage rather than guaranteed for every address.
 
 ```text
 [Raw User Address] ──> [standardize_address()] ──> [SQL Query / Trigram / KNN] ──> [GPS Latitude & Longitude + CEP]
@@ -154,7 +154,7 @@ The release will only build out with a clean build and matching tag/version numb
 
 ## Files
 
-```
+```text
 Makefile                - PGXS makefile
 README.md               - this file
 COPYING                 - License file
@@ -224,7 +224,7 @@ The regexes are used to recognize US states and Canadian provinces
 and USPS city names.
 
 ### City Regexes
-```
+```text
 usps-st-city-orig.txt  - this file contains all the acceptable USPS city
                          names by state. I periodically extract these from the
                          USPS and generate this file. I do NOT recommend
