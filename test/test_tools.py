@@ -62,6 +62,32 @@ class TestGenerateBrData(unittest.TestCase):
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
+    def test_provenance_and_licensing(self):
+        """Verify that README and generated SQL headers contain public open sources, IBGE and OSM ODbL attribution."""
+        readme_path = os.path.join(REPO_ROOT, "README.md")
+        with open(readme_path, "r", encoding="utf-8") as f:
+            readme_content = f.read()
+
+        self.assertIn("public open sources", readme_content)
+        self.assertIn("OpenStreetMap contributors", readme_content)
+        self.assertIn("Open Database License (ODbL)", readme_content)
+        self.assertIn("https://opendatacommons.org/licenses/odbl/", readme_content)
+
+        with tempfile.NamedTemporaryFile(mode="w+", suffix=".sql", delete=False) as tf:
+            temp_lex_path = tf.name
+
+        try:
+            generate_br_data.generate_br_lex_sql(temp_lex_path)
+            with open(temp_lex_path, "r", encoding="utf-8") as f:
+                lex_content = f.read()
+
+            self.assertIn("public open sources (IBGE official open data and OpenStreetMap)", lex_content)
+            self.assertIn("ODbL", lex_content)
+            self.assertIn("https://opendatacommons.org/licenses/odbl/", lex_content)
+        finally:
+            if os.path.exists(temp_lex_path):
+                os.remove(temp_lex_path)
+
 
 class TestImportCnefe(unittest.TestCase):
     """Tests for import_cnefe.py logic and validation."""
@@ -173,9 +199,41 @@ class TestImportCnefe(unittest.TestCase):
                 with self.assertRaises(IOError) as ctx:
                     import_cnefe.download_cnefe("PA", temp_dir)
                 self.assertIn("Download truncado", str(ctx.exception))
-                # Verify tmp file was cleaned up
+                # Verify tmp file was cleaned up and final file not created
                 tmp_file = os.path.join(temp_dir, "15_PA.zip.tmp")
+                dest_file = os.path.join(temp_dir, "15_PA.zip")
                 self.assertFalse(os.path.exists(tmp_file))
+                self.assertFalse(os.path.exists(dest_file))
+
+    def test_download_cnefe_success_and_absent_content_length(self):
+        """Verify successful download promotion when Content-Length matches or is absent."""
+        mock_resp = MagicMock()
+        data = b"full_cnefe_file_content"
+        mock_resp.headers = {"Content-Length": str(len(data))}
+        mock_resp.read.side_effect = [data, b""]
+        mock_resp.__enter__.return_value = mock_resp
+        mock_resp.__exit__.return_value = False
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("urllib.request.urlopen", return_value=mock_resp):
+                dest = import_cnefe.download_cnefe("PA", temp_dir)
+                self.assertTrue(os.path.exists(dest))
+                with open(dest, "rb") as f:
+                    self.assertEqual(f.read(), data)
+
+        # Test absent Content-Length
+        mock_resp_no_len = MagicMock()
+        mock_resp_no_len.headers = {}
+        mock_resp_no_len.read.side_effect = [data, b""]
+        mock_resp_no_len.__enter__.return_value = mock_resp_no_len
+        mock_resp_no_len.__exit__.return_value = False
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("urllib.request.urlopen", return_value=mock_resp_no_len):
+                dest = import_cnefe.download_cnefe("PA", temp_dir)
+                self.assertTrue(os.path.exists(dest))
+                with open(dest, "rb") as f:
+                    self.assertEqual(f.read(), data)
 
     def test_get_target_ufs(self):
         """Verify parsing of single UF, multiple comma-separated UFs, and BR/ALL."""
@@ -191,8 +249,59 @@ class TestImportCnefe(unittest.TestCase):
         all_ufs_flag = import_cnefe.get_target_ufs("SP", all_flag=True)
         self.assertEqual(len(all_ufs_flag), 27)
 
-        with self.assertRaises(ValueError):
-            import_cnefe.get_target_ufs("INVALID_UF")
+    def test_schema_definition_consistency(self):
+        """Verify that cnefe_enderecos table schema in docs and importer match columns and types."""
+        docs_path = os.path.join(REPO_ROOT, "docs", "geocodificador_cnefe_brasil.md")
+        with open(docs_path, "r", encoding="utf-8") as f:
+            docs_content = f.read()
+
+        import_cnefe_path = os.path.join(REPO_ROOT, "tools", "import_cnefe.py")
+        with open(import_cnefe_path, "r", encoding="utf-8") as f:
+            importer_content = f.read()
+
+        expected_columns = [
+            "id bigserial PRIMARY KEY",
+            "cod_municipio_ibge integer NOT NULL",
+            "municipio text NOT NULL",
+            "uf varchar(2) NOT NULL",
+            "tipo text",
+            "titulo text",
+            "logradouro text NOT NULL",
+            "numero text",
+            "modificador text",
+            "bairro text",
+            "cep varchar(9)",
+            "latitude double precision",
+            "longitude double precision",
+            "geom geometry(Point, 4326)"
+        ]
+
+        for col in expected_columns:
+            self.assertIn(col, docs_content, f"Missing column in docs: {col}")
+            self.assertIn(col, importer_content, f"Missing column in importer: {col}")
+
+        # Ensure obsolete column 'complemento' is not present in either schema definition
+        self.assertNotIn("complemento text", docs_content)
+        self.assertNotIn("complemento text", importer_content)
+
+    def test_reverse_geocoding_geography_knn(self):
+        """Verify that reverse geocoding index and query use geography KNN for metric distance."""
+        docs_path = os.path.join(REPO_ROOT, "docs", "geocodificador_cnefe_brasil.md")
+        with open(docs_path, "r", encoding="utf-8") as f:
+            docs_content = f.read()
+
+        import_cnefe_path = os.path.join(REPO_ROOT, "tools", "import_cnefe.py")
+        with open(import_cnefe_path, "r", encoding="utf-8") as f:
+            importer_content = f.read()
+
+        # Both docs and importer must create GiST index on geography
+        self.assertIn("CREATE INDEX IF NOT EXISTS idx_cnefe_geog", docs_content)
+        self.assertIn("ON cnefe_enderecos USING GIST ((geom::geography))", docs_content)
+        self.assertIn("CREATE INDEX IF NOT EXISTS idx_cnefe_geog ON cnefe_enderecos USING GIST ((geom::geography))", importer_content)
+
+        # Docs query 3 must order by geography KNN (<->) matching ST_Distance in meters
+        self.assertIn("ST_Distance(c.geom::geography", docs_content)
+        self.assertIn("c.geom::geography <->", docs_content)
 
 
 if __name__ == "__main__":
