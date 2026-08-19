@@ -79,9 +79,9 @@ The extension supports datasets for different countries:
 ### Open Data Provenance for Brazil Dataset (`address_standardizer_data_br`)
 
 > **Data Provenance & Licensing Statement:**
-> The `address_standardizer_data_br` dataset is constructed exclusively from 100% public, official open data sources:
-> * **IBGE (Instituto Brasileiro de Geografia e Estatística):** Official Public API for Localidades (5,571 Brazilian Municipalities and 27 Federative Units / States) and CNEFE 2022 (Cadastro Nacional de Endereços para Fins Estatísticos) under open government data terms.
-> * **OpenStreetMap (OSM):** Standard community open terminology for Brazilian thoroughfare and unit types.
+> The `address_standardizer_data_br` dataset is constructed exclusively from public open sources:
+> * **IBGE (Instituto Brasileiro de Geografia e Estatística):** Official government open data from the Public API for Localidades (5,571 Brazilian Municipalities and 27 Federative Units / States) and CNEFE 2022 (Cadastro Nacional de Endereços para Fins Estatísticos) under open government data terms.
+> * **OpenStreetMap (OSM):** Community open terminology for Brazilian thoroughfare and unit types, © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), licensed under the [Open Data Commons Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/).
 > 
 > *No proprietary or copyrighted postal databases (such as Empresa Brasileira de Correios e Telégrafos - DNE) are used.*
 

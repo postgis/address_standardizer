@@ -163,7 +163,7 @@ def ensure_tables_exist() -> None:
     CREATE TABLE IF NOT EXISTS cnefe_enderecos (
         id bigserial PRIMARY KEY,
         cod_municipio_ibge integer NOT NULL,
-        municipio text,
+        municipio text NOT NULL,
         uf varchar(2) NOT NULL,
         tipo text,
         titulo text,
@@ -179,7 +179,7 @@ def ensure_tables_exist() -> None:
 
     CREATE UNLOGGED TABLE IF NOT EXISTS cnefe_stage (
         cod_municipio_ibge integer NOT NULL,
-        municipio text,
+        municipio text NOT NULL,
         uf varchar(2) NOT NULL,
         tipo text,
         titulo text,
