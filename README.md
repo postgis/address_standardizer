@@ -146,7 +146,7 @@ SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Quadra 10 Lot
 The `release.yml` GitHub Action defines a release-on-tag process.
 
 * Ensure the `NEWS.md` file is up-to-date and the release date is set to the current date.
-* Ensure that the version in `address_standardizer.control` and `address_standardizer_data_us.control` is set to the release version (eg `default_version = '3.7.1'`).
+* Ensure that the version in `address_standardizer.control`, `address_standardizer_data_us.control`, and `address_standardizer_data_br.control` is set to the release version (eg `default_version = '3.7.1'`).
 * Tag the repository with that version prefixed by `v` (`git tag v3.7.1 && git push origin v3.7.1`)
 
 The release will only build out with a clean build and matching tag/version numbers.

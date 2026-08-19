@@ -62,7 +62,7 @@ Você pode configurar no seu arquivo `.env`:
 ```bash
 POSTGRES_DB=address_db
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
+POSTGRES_PASSWORD=your_secure_password_here
 POSTGRES_PORT=5432
 
 # Diretórios de armazenamento (podem apontar para disco local ou volume externo)
