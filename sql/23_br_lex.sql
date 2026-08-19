@@ -1,7 +1,8 @@
 -- ==========================================================================
 -- PostGIS address_standardizer: Brazilian Lexicon Dataset (br_lex)
--- Data Provenance: Derived from official Brazilian public open data (IBGE / OpenStreetMap)
--- License: Public Domain / Open Source (BSD/PostGIS License)
+-- Data Provenance: Derived from public open sources (IBGE official open data and OpenStreetMap)
+-- OpenStreetMap data is (c) OpenStreetMap contributors, licensed under the Open Data Commons Open Database License (ODbL) (https://opendatacommons.org/licenses/odbl/)
+-- License: BSD/PostGIS License & Open Database License (ODbL) for OSM-derived terminology
 -- ==========================================================================
 
 CREATE TABLE IF NOT EXISTS br_lex (

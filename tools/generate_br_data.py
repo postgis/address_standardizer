@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 Generator for PostGIS address_standardizer Brazilian Dataset (address_standardizer_data_br)
-Data Sources:
-  - IBGE (Instituto Brasileiro de Geografia e Estatística) - API de Localidades & CNEFE 2022 (Open Data / Public Domain)
-  - OpenStreetMap (ODbL) terminology for Brazilian street types and qualifiers
+Data Sources & Provenance:
+  - IBGE (Instituto Brasileiro de Geografia e Estatística): Official government open data from Localidades API & CNEFE 2022.
+  - OpenStreetMap: Community open terminology for Brazilian street types and qualifiers (© OpenStreetMap contributors, ODbL).
 Note:
-  This dataset is strictly constructed from official public open data sources (IBGE/Gov.br).
+  This dataset is strictly constructed from public open sources (IBGE and OpenStreetMap).
   No proprietary postal database (such as Correios DNE) is used.
 """
 
@@ -384,8 +384,9 @@ def generate_br_lex_sql(output_path: str):
     with open(output_path, "w", encoding="utf-8") as f:
         f.write("-- ==========================================================================\n")
         f.write("-- PostGIS address_standardizer: Brazilian Lexicon Dataset (br_lex)\n")
-        f.write("-- Data Provenance: Derived from official Brazilian public open data (IBGE / OpenStreetMap)\n")
-        f.write("-- License: Public Domain / Open Source (BSD/PostGIS License)\n")
+        f.write("-- Data Provenance: Derived from public open sources (IBGE official open data and OpenStreetMap)\n")
+        f.write("-- OpenStreetMap data is (c) OpenStreetMap contributors, licensed under the Open Data Commons Open Database License (ODbL) (https://opendatacommons.org/licenses/odbl/)\n")
+        f.write("-- License: BSD/PostGIS License & Open Database License (ODbL) for OSM-derived terminology\n")
         f.write("-- ==========================================================================\n\n")
         f.write("CREATE TABLE IF NOT EXISTS br_lex (\n")
         f.write("    id serial,\n")
