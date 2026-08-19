@@ -85,7 +85,7 @@ docker exec -i postgis_br psql -U postgres -d address_db -f /docker-entrypoint-i
 Caso deseje reiniciar o cluster do zero (apagando os dados atuais):
 ```bash
 # Apague a pasta de dados configurada em POSTGRES_DATA_DIR (ou fallback ./.pgdata)
-docker compose down && rm -rf ${POSTGRES_DATA_DIR:-./.pgdata} && docker compose up -d
+docker compose down && rm -rf -- "${POSTGRES_DATA_DIR:-./.pgdata}" && docker compose up -d
 ```
 
 

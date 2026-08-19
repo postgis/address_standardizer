@@ -306,11 +306,12 @@ class TestImportCnefe(unittest.TestCase):
         self.assertIn("ST_DWithin(c.geom::geography", docs_content)
 
     def test_psql_base_cmd_host_mode_w_flag(self):
-        """Verify that psql_base_cmd includes -w flag in direct host mode."""
-        with patch.dict(os.environ, {"POSTGRES_HOST": "localhost", "POSTGRES_PORT": "5433"}):
+        """Verify that psql_base_cmd includes -w flag in direct host mode and sets PGPASSWORD."""
+        with patch.dict(os.environ, {"POSTGRES_HOST": "localhost", "POSTGRES_PORT": "5433", "POSTGRES_PASSWORD": "secret_password"}, clear=True):
             cmd = import_cnefe.psql_base_cmd()
             self.assertIn("-w", cmd)
             self.assertIn("localhost", cmd)
+            self.assertEqual(os.environ.get("PGPASSWORD"), "secret_password")
 
     def test_generate_br_gaz_empty_ibge_error(self):
         """Verify that generate_br_gaz_sql raises RuntimeError when ibge_data is empty."""
@@ -376,8 +377,8 @@ class TestImportCnefe(unittest.TestCase):
 
         self.assertIn("-f /docker-entrypoint-initdb.d/init.sql", init_content)
         self.assertIn("-f /docker-entrypoint-initdb.d/init.sql", tools_readme_content)
-        self.assertIn("POSTGRES_DATA_DIR", init_content)
-        self.assertIn("POSTGRES_DATA_DIR", tools_readme_content)
+        self.assertIn('rm -rf -- "${POSTGRES_DATA_DIR:-./.pgdata}"', init_content)
+        self.assertIn('rm -rf -- "${POSTGRES_DATA_DIR:-./.pgdata}"', tools_readme_content)
 
     def test_isolated_per_uf_staging_table(self):
         """Verify that import_cnefe.py creates and uses isolated per-UF staging tables to avoid concurrency conflicts."""
