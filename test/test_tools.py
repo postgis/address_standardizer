@@ -335,6 +335,19 @@ class TestImportCnefe(unittest.TestCase):
         self.assertIn("healthcheck:", compose_content)
         self.assertIn("pg_isready", compose_content)
 
+    def test_existing_cluster_upgrade_guidance(self):
+        """Verify that docker/init.sql and tools/README.md document the upgrade procedure for existing clusters."""
+        init_sql_path = os.path.join(REPO_ROOT, "docker", "init.sql")
+        with open(init_sql_path, "r", encoding="utf-8") as f:
+            init_content = f.read()
+
+        tools_readme_path = os.path.join(REPO_ROOT, "tools", "README.md")
+        with open(tools_readme_path, "r", encoding="utf-8") as f:
+            tools_readme_content = f.read()
+
+        self.assertIn("-f /docker-entrypoint-initdb.d/init.sql", init_content)
+        self.assertIn("-f /docker-entrypoint-initdb.d/init.sql", tools_readme_content)
+
 
 if __name__ == "__main__":
     unittest.main()
