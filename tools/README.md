@@ -70,3 +70,21 @@ POSTGRES_DATA_DIR=./.pgdata
 CNEFE_DOWNLOAD_DIR=./downloads_cnefe
 ```
 
+---
+
+## 3. Atualização / Migração de Bancos de Dados Existentes
+
+O script `docker/init.sql` é executado pelo PostgreSQL automaticamente apenas na inicialização de um cluster novo (quando a pasta `.pgdata` está vazia).
+
+Para aplicar ou atualizar as tabelas e regras do dataset brasileiro em uma base ou contêiner existente sem recriar o cluster:
+
+```bash
+docker exec -i postgis_br psql -U postgres -d address_db -f /docker-entrypoint-initdb.d/init.sql
+```
+
+Caso deseje reiniciar o cluster do zero (apagando os dados atuais):
+```bash
+docker compose down && rm -rf .pgdata && docker compose up -d
+```
+
+
