@@ -142,12 +142,13 @@ class TestImportCnefe(unittest.TestCase):
             self.assertIn("Substituição parcial com --limit foi rejeitada", str(ctx.exception))
 
     def test_row_filtering_and_parsing(self):
-        """Verify that records with empty street name or missing IBGE code are skipped."""
+        """Verify that records with empty street name, unmapped municipality, or missing IBGE code are skipped."""
         csv_data = (
             "COD_MUNICIPIO;NOM_TIPO_SEGLOGR;NOM_TITULO_SEGLOGR;NOM_SEGLOGR;NUM_ENDERECO;DSC_MODIFICADOR;DSC_LOCALIDADE;CEP;LATITUDE;LONGITUDE\n"
             "3550308;RUA;;AUGUSTA;100;APTO 12;CENTRO;01304-000;-23.5532;-46.6521\n"
             "3550308;RUA;;;100;;;;;\n"  # Missing NOM_SEGLOGR -> must be skipped
             ";RUA;;PAULISTA;100;;;;;\n"  # Missing COD_MUNICIPIO -> must be skipped
+            "9999999;RUA;;ORFANATO;100;;;;;\n"  # Unmapped COD_MUNICIPIO -> must be skipped
             "3550308;AVENIDA;DOUTOR;ARNALDO;500;;PACAEMBU;01246-000;-23.5550;-46.6660\n"
         )
         with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tf:
@@ -336,7 +337,7 @@ class TestImportCnefe(unittest.TestCase):
         self.assertIn("pg_isready", compose_content)
 
     def test_existing_cluster_upgrade_guidance(self):
-        """Verify that docker/init.sql and tools/README.md document the upgrade procedure for existing clusters."""
+        """Verify that docker/init.sql and tools/README.md document the upgrade procedure and POSTGRES_DATA_DIR reset."""
         init_sql_path = os.path.join(REPO_ROOT, "docker", "init.sql")
         with open(init_sql_path, "r", encoding="utf-8") as f:
             init_content = f.read()
@@ -347,6 +348,17 @@ class TestImportCnefe(unittest.TestCase):
 
         self.assertIn("-f /docker-entrypoint-initdb.d/init.sql", init_content)
         self.assertIn("-f /docker-entrypoint-initdb.d/init.sql", tools_readme_content)
+        self.assertIn("POSTGRES_DATA_DIR", init_content)
+        self.assertIn("POSTGRES_DATA_DIR", tools_readme_content)
+
+    def test_isolated_per_uf_staging_table(self):
+        """Verify that import_cnefe.py creates and uses isolated per-UF staging tables to avoid concurrency conflicts."""
+        import_cnefe_path = os.path.join(REPO_ROOT, "tools", "import_cnefe.py")
+        with open(import_cnefe_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        self.assertIn('stage_table = f"cnefe_stage_{uf_upper.lower()}"', content)
+        self.assertIn('DROP TABLE IF EXISTS {stage_table}', content)
 
 
 if __name__ == "__main__":

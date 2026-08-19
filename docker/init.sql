@@ -6,7 +6,7 @@
 -- e regras em um banco já existente, execute manualmente via container:
 --   docker exec -i postgis_br psql -U postgres -d address_db -f /docker-entrypoint-initdb.d/init.sql
 -- Ou redefina o volume de dados (ATENÇÃO: apaga dados existentes):
---   docker compose down && rm -rf .pgdata && docker compose up -d
+--   docker compose down && rm -rf ${POSTGRES_DATA_DIR:-./.pgdata} && docker compose up -d
 --
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS address_standardizer;
