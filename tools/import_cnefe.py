@@ -57,7 +57,7 @@ def psql_base_cmd() -> list:
     host = os.getenv("POSTGRES_HOST")
     port = os.getenv("POSTGRES_PORT", "5432")
     if host:
-        return ["psql", "-h", host, "-p", port, "-U", user, "-d", db]
+        return ["psql", "-h", host, "-p", port, "-U", user, "-d", db, "-w"]
     container = os.getenv("POSTGRES_CONTAINER", "postgis_br")
     return ["docker", "exec", "-i", container, "psql", "-U", user, "-d", db]
 

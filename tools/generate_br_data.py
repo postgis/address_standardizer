@@ -435,32 +435,22 @@ def generate_br_gaz_sql(output_path: str, ibge_data: list):
 
         if norm_name != name.upper():
             gaz_entries.append((name.upper(), sigla, 11))
+            gaz_entries.append((name.upper(), norm_name, 1))
 
     # 3. Municipalities (From IBGE)
-    if ibge_data:
-        for mun in ibge_data:
-            nome = mun.get('nome', '').strip()
-            if nome:
-                norm_nome = normalize_text(nome)
-                # City entry (Token 10 = CITY)
-                gaz_entries.append((norm_nome, norm_nome, 10))
-                gaz_entries.append((norm_nome, norm_nome, 1))
-                if nome.upper() != norm_nome:
-                    gaz_entries.append((nome.upper(), norm_nome, 10))
-    else:
-        # Fallback major capitals
-        capitals = [
-            "SAO PAULO", "RIO DE JANEIRO", "BRASILIA", "SALVADOR", "FORTALEZA",
-            "BELO HORIZONTE", "MANAUS", "CURITIBA", "RECIFE", "GOIANIA",
-            "BELEM", "PORTO ALEGRE", "GUARULHOS", "CAMPINAS", "SAO LUIS",
-            "SAO GONCALO", "MACEIO", "DUQUE DE CAXIAS", "NATAL", "TERESINA",
-            "SAO BERNARDO DO CAMPO", "CAMPO GRANDE", "OSASCO", "SANTO ANDRE",
-            "JOAO PESSOA", "JABOATAO DOS GUARARAPES", "CONTAGEM", "SAO JOSE DOS CAMPOS",
-            "UBERLANDIA", "FLORIANOPOLIS", "CUIABA", "ARACAJU", "VITORIA"
-        ]
-        for cap in capitals:
-            gaz_entries.append((cap, cap, 10))
-            gaz_entries.append((cap, cap, 1))
+    if not ibge_data:
+        raise RuntimeError("IBGE municipality data is empty or missing. Cannot generate gazetteer without official IBGE data.")
+
+    for mun in ibge_data:
+        nome = mun.get('nome', '').strip()
+        if nome:
+            norm_nome = normalize_text(nome)
+            # City entry (Token 10 = CITY) and Word (Token 1)
+            gaz_entries.append((norm_nome, norm_nome, 10))
+            gaz_entries.append((norm_nome, norm_nome, 1))
+            if nome.upper() != norm_nome:
+                gaz_entries.append((nome.upper(), norm_nome, 10))
+                gaz_entries.append((nome.upper(), norm_nome, 1))
 
     # Clean sequence numbers per word
     word_groups = {}
