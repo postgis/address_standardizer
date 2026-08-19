@@ -157,6 +157,7 @@ SELECT
     c.cep,
     ST_Distance(c.geom::geography, ST_SetSRID(ST_Point(-46.6521, -23.5532), 4326)::geography) AS distancia_metros
 FROM cnefe_enderecos c
+WHERE ST_DWithin(c.geom::geography, ST_SetSRID(ST_Point(-46.6521, -23.5532), 4326)::geography, 500) -- Raio de busca de até 500 metros
 ORDER BY c.geom::geography <-> ST_SetSRID(ST_Point(-46.6521, -23.5532), 4326)::geography -- Busca ultra-rápida por KNN GiST em geografia (metros)
 LIMIT 1;
 ```

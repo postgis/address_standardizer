@@ -104,7 +104,7 @@ class TestImportCnefe(unittest.TestCase):
 
         with patch.dict(os.environ, {"POSTGRES_USER": "testuser", "POSTGRES_DB": "testdb", "POSTGRES_HOST": "localhost", "POSTGRES_PORT": "5433"}, clear=True):
             cmd = import_cnefe.psql_base_cmd()
-            self.assertEqual(cmd, ["psql", "-h", "localhost", "-p", "5433", "-U", "testuser", "-d", "testdb"])
+            self.assertEqual(cmd, ["psql", "-h", "localhost", "-p", "5433", "-U", "testuser", "-d", "testdb", "-w"])
 
     def test_invalid_uf_rejection(self):
         with self.assertRaises(ValueError):
@@ -286,7 +286,7 @@ class TestImportCnefe(unittest.TestCase):
         self.assertNotIn("complemento text", importer_content)
 
     def test_reverse_geocoding_geography_knn(self):
-        """Verify that reverse geocoding index and query use geography KNN for metric distance."""
+        """Verify that reverse geocoding index and query use geography KNN and ST_DWithin for metric search."""
         docs_path = os.path.join(REPO_ROOT, "docs", "geocodificador_cnefe_brasil.md")
         with open(docs_path, "r", encoding="utf-8") as f:
             docs_content = f.read()
@@ -300,9 +300,37 @@ class TestImportCnefe(unittest.TestCase):
         self.assertIn("ON cnefe_enderecos USING GIST ((geom::geography))", docs_content)
         self.assertIn("CREATE INDEX IF NOT EXISTS idx_cnefe_geog ON cnefe_enderecos USING GIST ((geom::geography))", importer_content)
 
-        # Docs query 3 must order by geography KNN (<->) matching ST_Distance in meters
+        # Docs query 3 must order by geography KNN (<->) and use ST_DWithin radius filter
         self.assertIn("ST_Distance(c.geom::geography", docs_content)
         self.assertIn("c.geom::geography <->", docs_content)
+        self.assertIn("ST_DWithin(c.geom::geography", docs_content)
+
+    def test_psql_base_cmd_host_mode_w_flag(self):
+        """Verify that psql_base_cmd includes -w flag in direct host mode."""
+        with patch.dict(os.environ, {"POSTGRES_HOST": "localhost", "POSTGRES_PORT": "5433"}):
+            cmd = import_cnefe.psql_base_cmd()
+            self.assertIn("-w", cmd)
+            self.assertIn("localhost", cmd)
+
+    def test_generate_br_gaz_empty_ibge_error(self):
+        """Verify that generate_br_gaz_sql raises RuntimeError when ibge_data is empty."""
+        with tempfile.NamedTemporaryFile(suffix=".sql") as tf:
+            with self.assertRaises(RuntimeError) as ctx:
+                generate_br_data.generate_br_gaz_sql(tf.name, [])
+            self.assertIn("empty or missing", str(ctx.exception))
+
+    def test_accented_variants_token_1_generated(self):
+        """Verify that accented states and municipalities generate token 1 WORD entries."""
+        with tempfile.NamedTemporaryFile(suffix=".sql") as tf:
+            mock_mun = [{"id": 3550308, "nome": "São Paulo", "microrregiao": {"mesorregiao": {"UF": {"sigla": "SP", "nome": "São Paulo"}}}}]
+            generate_br_data.generate_br_gaz_sql(tf.name, mock_mun)
+            with open(tf.name, "r", encoding="utf-8") as f:
+                content = f.read()
+            
+            # SÃO PAULO with accent must have token 10 (CITY) and token 1 (WORD)
+            self.assertIn("'SÃO PAULO', 'SAO PAULO', 10", content)
+            self.assertIn("'SÃO PAULO', 'SAO PAULO', 1", content)
+
 
     def test_control_file_version_synchronization(self):
         """Verify that all extension control files have synchronized default_version values."""
