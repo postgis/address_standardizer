@@ -222,9 +222,26 @@ def import_cnefe_to_postgres(
     if muni_map is None:
         muni_map = get_municipality_map()
 
-    print(f"Preparando importação para UF: {uf_upper}...")
-    # Clean staging table before ingestion
-    subprocess.run(psql_base_cmd() + ["-c", "TRUNCATE cnefe_stage;"], check=True)
+    stage_table = f"cnefe_stage_{uf_upper.lower()}"
+    print(f"Preparando importação para UF: {uf_upper} (tabela temporária: {stage_table})...")
+    create_stage_sql = f"""
+    CREATE UNLOGGED TABLE IF NOT EXISTS {stage_table} (
+        cod_municipio_ibge integer NOT NULL,
+        municipio text NOT NULL,
+        uf varchar(2) NOT NULL,
+        tipo text,
+        titulo text,
+        logradouro text NOT NULL,
+        numero text,
+        modificador text,
+        bairro text,
+        cep varchar(9),
+        latitude double precision,
+        longitude double precision
+    );
+    TRUNCATE {stage_table};
+    """
+    subprocess.run(psql_base_cmd() + ["-c", create_stage_sql], check=True)
 
     print(f"Lendo e transmitindo dados de {zip_path}...")
     with zipfile.ZipFile(zip_path, 'r') as z:
@@ -234,7 +251,7 @@ def import_cnefe_to_postgres(
         print(f"Arquivo CSV interno: {csv_filename}")
         
         copy_sql = (
-            "COPY cnefe_stage (cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro, "
+            f"COPY {stage_table} (cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro, "
             "numero, modificador, bairro, cep, latitude, longitude) FROM STDIN "
             "WITH (FORMAT csv, DELIMITER E'\\t', QUOTE '\"', ESCAPE '\"', NULL '');"
         )
@@ -267,6 +284,8 @@ def import_cnefe_to_postgres(
                 
                 muni_info = muni_map.get(cod_muni, ("", uf_upper))
                 municipio = muni_info[0]
+                if not municipio:
+                    continue  # Filter out records without a mapped municipality name
                 
                 tipo = remove_accents(row.get("NOM_TIPO_SEGLOGR", ""))
                 titulo = remove_accents(row.get("NOM_TITULO_SEGLOGR", ""))
@@ -304,7 +323,7 @@ def import_cnefe_to_postgres(
             raise subprocess.CalledProcessError(return_code, psql_cmd)
         
         elapsed = time.time() - start_time
-        print(f"\n✅ Total inserido em staging: {count:,} registros em {elapsed:.1f}s.")
+        print(f"\n✅ Total inserido em staging ({stage_table}): {count:,} registros em {elapsed:.1f}s.")
 
     print(f"\nAplicando transação atômica para substituir dados da UF: {uf_upper}...")
     atomic_swap_sql = f"""
@@ -317,8 +336,8 @@ def import_cnefe_to_postgres(
     SELECT
         cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro,
         numero, modificador, bairro, cep, latitude, longitude
-    FROM cnefe_stage WHERE uf = '{uf_upper}';
-    TRUNCATE cnefe_stage;
+    FROM {stage_table};
+    DROP TABLE IF EXISTS {stage_table};
     COMMIT;
     """
     subprocess.run(psql_base_cmd() + ["-c", atomic_swap_sql], check=True)
