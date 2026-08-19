@@ -303,6 +303,38 @@ class TestImportCnefe(unittest.TestCase):
         self.assertIn("ST_Distance(c.geom::geography", docs_content)
         self.assertIn("c.geom::geography <->", docs_content)
 
+    def test_control_file_version_synchronization(self):
+        """Verify that all extension control files have synchronized default_version values."""
+        import re
+        control_files = [
+            "address_standardizer.control",
+            "address_standardizer_data_us.control",
+            "address_standardizer_data_br.control"
+        ]
+        versions = {}
+        for fname in control_files:
+            fpath = os.path.join(REPO_ROOT, fname)
+            with open(fpath, "r", encoding="utf-8") as f:
+                content = f.read()
+            match = re.search(r"default_version\s*=\s*'([^']+)'", content)
+            self.assertIsNotNone(match, f"Could not find default_version in {fname}")
+            versions[fname] = match.group(1)
+
+        first_v = next(iter(versions.values()))
+        for fname, ver in versions.items():
+            self.assertEqual(ver, first_v, f"Version mismatch in {fname}: expected {first_v}, got {ver}")
+
+    def test_docker_compose_security_and_healthcheck(self):
+        """Verify that docker-compose.yml enforces loopback binding, password requirement, and healthcheck."""
+        compose_path = os.path.join(REPO_ROOT, "docker-compose.yml")
+        with open(compose_path, "r", encoding="utf-8") as f:
+            compose_content = f.read()
+
+        self.assertIn("127.0.0.1:", compose_content)
+        self.assertIn("POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Please set POSTGRES_PASSWORD in .env}", compose_content)
+        self.assertIn("healthcheck:", compose_content)
+        self.assertIn("pg_isready", compose_content)
+
 
 if __name__ == "__main__":
     unittest.main()
