@@ -141,7 +141,7 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
                 mb_total = total_size / (1024 * 1024)
                 print(f"\rProgresso do Download: {percent:.1f}% ({mb_down:.1f}/{mb_total:.1f} MB)", end="", flush=True)
 
-    if total_size > 0 and downloaded < total_size:
+    if total_size > 0 and downloaded != total_size:
         if os.path.exists(tmp_path):
             try:
                 os.remove(tmp_path)
