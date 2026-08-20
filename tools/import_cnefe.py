@@ -58,7 +58,7 @@ def psql_base_cmd() -> list:
     port = os.getenv("POSTGRES_PORT", "5432")
     password = os.getenv("POSTGRES_PASSWORD")
     if host:
-        if password and "PGPASSWORD" not in os.environ:
+        if password and not os.environ.get("PGPASSWORD"):
             os.environ["PGPASSWORD"] = password
         return ["psql", "-h", host, "-p", port, "-U", user, "-d", db, "-w"]
     container = os.getenv("POSTGRES_CONTAINER", "postgis_br")

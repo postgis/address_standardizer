@@ -313,6 +313,18 @@ class TestImportCnefe(unittest.TestCase):
             self.assertIn("localhost", cmd)
             self.assertEqual(os.environ.get("PGPASSWORD"), "secret_password")
 
+    def test_psql_base_cmd_pgpassword_empty_fallback(self):
+        """Verify that empty PGPASSWORD falls back to non-empty POSTGRES_PASSWORD and non-empty PGPASSWORD is preserved."""
+        with patch.dict(os.environ, {"POSTGRES_HOST": "localhost", "POSTGRES_PASSWORD": "fallback_pass", "PGPASSWORD": ""}, clear=True):
+            cmd = import_cnefe.psql_base_cmd()
+            self.assertIn("-w", cmd)
+            self.assertEqual(os.environ.get("PGPASSWORD"), "fallback_pass")
+
+        with patch.dict(os.environ, {"POSTGRES_HOST": "localhost", "POSTGRES_PASSWORD": "fallback_pass", "PGPASSWORD": "custom_pass"}, clear=True):
+            cmd = import_cnefe.psql_base_cmd()
+            self.assertIn("-w", cmd)
+            self.assertEqual(os.environ.get("PGPASSWORD"), "custom_pass")
+
     def test_generate_br_gaz_empty_ibge_error(self):
         """Verify that generate_br_gaz_sql raises RuntimeError when ibge_data is empty."""
         with tempfile.NamedTemporaryFile(suffix=".sql") as tf:
