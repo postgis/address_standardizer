@@ -16,13 +16,13 @@ flowchart TD
     
     Clean --> Search["4. Consulta SQL com Índices\n(Busca Exata + Fuzzy pg_trgm)"]
     
-    DB[("5. Base CNEFE (IBGE)\n111M+ de endereços com GPS")] --> Search
+    DB[("5. Base CNEFE (IBGE)\n111M+ de endereços\n(coordenadas quando disponíveis)")] --> Search
     
-    Search --> Result["6. Resultado com Precisão GPS\nCEP: 01304-000\nLatitude: -23.5532\nLongitude: -46.6521\nGeometria: Point(4326)"]
+    Search --> Result["6. Resultado Georreferenciado\nCEP: 01304-000\nLatitude / Longitude (se disponíveis)\nGeometria: Point(4326)"]
 ```
 
 * **`address_standardizer` (Etapa 1):** O motor gramatical leve (~1 MB). Ele não armazena todas as ruas do país, mas sabe como o brasileiro escreve endereços e desmembra o texto livre em colunas consistentes.
-* **CNEFE do IBGE (Etapa 2):** A base física de referência (~15 a 30 GB no PostgreSQL com 111+ milhões de pontos). Armazena cada coordenada geográfica real do Censo 2022.
+* **CNEFE do IBGE (Etapa 2):** A base física de referência (~15 a 30 GB no PostgreSQL com 111+ milhões de pontos). Armazena as coordenadas geográficas coletadas no Censo 2022 (quando disponíveis para o endereço).
 
 ---
 

@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 import unittest
+import uuid
 import zipfile
 from unittest.mock import MagicMock, patch
 
@@ -411,14 +412,55 @@ class TestImportCnefe(unittest.TestCase):
         self.assertIn('rm -rf -- "${POSTGRES_DATA_DIR:-./.pgdata}"', init_content)
         self.assertIn('rm -rf -- "${POSTGRES_DATA_DIR:-./.pgdata}"', tools_readme_content)
 
+    def test_generate_uuid7(self):
+        """Verify that generate_uuid7 produces valid RFC 9562 UUIDv7 strings."""
+        u_str = import_cnefe.generate_uuid7()
+        u = uuid.UUID(u_str)
+        self.assertEqual(u.version, 7)
+
     def test_isolated_per_uf_staging_table(self):
-        """Verify that import_cnefe.py creates and uses isolated per-UF staging tables to avoid concurrency conflicts."""
+        """Verify that import_cnefe.py creates and uses isolated unique staging tables to avoid concurrency conflicts."""
         import_cnefe_path = os.path.join(REPO_ROOT, "tools", "import_cnefe.py")
         with open(import_cnefe_path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        self.assertIn('stage_table = f"cnefe_stage_{uf_upper.lower()}"', content)
+        self.assertIn('stage_table = f"cnefe_stage_{uf_upper.lower()}_{run_id}"', content)
         self.assertIn('DROP TABLE IF EXISTS {stage_table}', content)
+        self.assertIn('finally:', content)
+
+    @patch("subprocess.Popen")
+    @patch("subprocess.run")
+    def test_import_cnefe_zero_count_aborts_safely(self, mock_run, mock_popen):
+        """Verify that when 0 valid rows exist, import_cnefe_to_postgres aborts without wiping data."""
+        mock_proc = MagicMock()
+        mock_proc.stdin = io.StringIO()
+        mock_proc.wait.return_value = 0
+        mock_popen.return_value = mock_proc
+
+        # Create a mock zip with a CSV containing no valid street rows
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tf:
+            zip_path = tf.name
+
+        try:
+            with zipfile.ZipFile(zip_path, "w") as z:
+                # CSV with empty street name (NOM_SEGLOGR is empty)
+                csv_data = "COD_MUNICIPIO;NOM_SEGLOGR;NOM_TIPO_SEGLOGR;NOM_TITULO_SEGLOGR;NUM_ENDERECO;DSC_MODIFICADOR;DSC_LOCALIDADE;CEP;LATITUDE;LONGITUDE\n3550308;;RUA;;100;;CENTRO;01001000;-23.55;-46.63\n"
+                z.writestr("test.csv", csv_data)
+
+            with patch("tools.import_cnefe.ensure_tables_exist"):
+                with patch("tools.import_cnefe.get_municipality_map", return_value={3550308: ("SAO PAULO", "SP")}):
+                    res = import_cnefe.import_cnefe_to_postgres(zip_path, "SP")
+                    self.assertEqual(res, 0)
+
+            # Check that atomic swap SQL (DELETE FROM cnefe_enderecos) was NOT called
+            executed_sqls = [call.args[0] for call in mock_run.call_args_list if call.args]
+            for cmd in executed_sqls:
+                cmd_str = " ".join(cmd) if isinstance(cmd, list) else str(cmd)
+                self.assertNotIn("DELETE FROM cnefe_enderecos WHERE uf = 'SP'", cmd_str)
+
+        finally:
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
 
 
 if __name__ == "__main__":
