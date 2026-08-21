@@ -12,13 +12,39 @@ import gzip
 import io
 import json
 import os
+import secrets
 import subprocess
 import sys
 import time
 from typing import Optional
 import unicodedata
 import urllib.request
+import uuid
 import zipfile
+
+
+def generate_uuid7() -> str:
+    """Generates an RFC 9562 UUIDv7 string."""
+    try:
+        import uuid6
+        return str(uuid6.uuid7())
+    except ImportError:
+        pass
+    try:
+        import uuid_extensions
+        return str(uuid_extensions.uuid7())
+    except ImportError:
+        pass
+    # Standard RFC 9562 UUIDv7 implementation
+    ns = time.time_ns()
+    ms = ns // 1_000_000
+    rand_bytes = secrets.token_bytes(10)
+    time_bytes = ms.to_bytes(6, byteorder="big")
+    ver_and_rand_a = (0x7000 | (int.from_bytes(rand_bytes[:2], "big") & 0x0FFF)).to_bytes(2, "big")
+    var_and_rand_b = (0x80 | (rand_bytes[2] & 0x3F)).to_bytes(1, "big") + rand_bytes[3:10]
+    raw = time_bytes + ver_and_rand_a + var_and_rand_b
+    return str(uuid.UUID(bytes=raw))
+
 
 def load_env() -> None:
     """Loads environment variables from .env in the repository root if present."""
@@ -225,7 +251,8 @@ def import_cnefe_to_postgres(
     if muni_map is None:
         muni_map = get_municipality_map()
 
-    stage_table = f"cnefe_stage_{uf_upper.lower()}"
+    run_id = generate_uuid7().replace("-", "")[:12]
+    stage_table = f"cnefe_stage_{uf_upper.lower()}_{run_id}"
     print(f"Preparando importação para UF: {uf_upper} (tabela temporária: {stage_table})...")
     create_stage_sql = f"""
     CREATE UNLOGGED TABLE IF NOT EXISTS {stage_table} (
@@ -246,120 +273,128 @@ def import_cnefe_to_postgres(
     """
     subprocess.run(psql_base_cmd() + ["-c", create_stage_sql], check=True)
 
-    print(f"Lendo e transmitindo dados de {zip_path}...")
-    with zipfile.ZipFile(zip_path, 'r') as z:
-        csv_filename = next((name for name in z.namelist() if name.endswith('.csv')), None)
-        if not csv_filename:
-            raise FileNotFoundError(f"Nenhum arquivo CSV encontrado dentro do arquivo ZIP: {zip_path}")
-        print(f"Arquivo CSV interno: {csv_filename}")
-        
-        copy_sql = (
-            f"COPY {stage_table} (cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro, "
-            "numero, modificador, bairro, cep, latitude, longitude) FROM STDIN "
-            "WITH (FORMAT csv, DELIMITER E'\\t', QUOTE '\"', ESCAPE '\"', NULL '');"
-        )
-        psql_cmd = psql_base_cmd() + ["-c", copy_sql]
-
-        proc = subprocess.Popen(psql_cmd, stdin=subprocess.PIPE, text=True, bufsize=65536)
-        tsv_writer = csv.writer(proc.stdin, delimiter='\t', lineterminator='\n', quoting=csv.QUOTE_MINIMAL)
-        
-        start_time = time.time()
-        count = 0
-        
-        with z.open(csv_filename, 'r') as raw_file:
-            text_stream = io.TextIOWrapper(raw_file, encoding='utf-8', errors='ignore')
-            reader = csv.DictReader(text_stream, delimiter=';')
+    try:
+        print(f"Lendo e transmitindo dados de {zip_path}...")
+        with zipfile.ZipFile(zip_path, 'r') as z:
+            csv_filename = next((name for name in z.namelist() if name.endswith('.csv')), None)
+            if not csv_filename:
+                raise FileNotFoundError(f"Nenhum arquivo CSV encontrado dentro do arquivo ZIP: {zip_path}")
+            print(f"Arquivo CSV interno: {csv_filename}")
             
-            for row in reader:
-                cod_muni_str = row.get("COD_MUNICIPIO", "").strip()
-                if not cod_muni_str:
-                    continue
-                try:
-                    cod_muni = int(cod_muni_str)
-                except ValueError:
-                    continue
-                if not cod_muni:
-                    continue
-                
-                logr_base = remove_accents(row.get("NOM_SEGLOGR", ""))
-                if not logr_base:
-                    continue  # Filter out records without a street name
-                
-                muni_info = muni_map.get(cod_muni, ("", uf_upper))
-                municipio = muni_info[0]
-                if not municipio:
-                    continue  # Filter out records without a mapped municipality name
-                
-                tipo = remove_accents(row.get("NOM_TIPO_SEGLOGR", ""))
-                titulo = remove_accents(row.get("NOM_TITULO_SEGLOGR", ""))
-                
-                if titulo:
-                    logradouro = f"{titulo} {logr_base}".strip()
-                else:
-                    logradouro = logr_base
-                
-                numero = row.get("NUM_ENDERECO", "").strip()
-                modificador = row.get("DSC_MODIFICADOR", "").strip()
-                bairro = remove_accents(row.get("DSC_LOCALIDADE", ""))
-                cep = row.get("CEP", "").strip()
-                
-                lat_str = row.get("LATITUDE", "").replace(",", ".").strip()
-                lon_str = row.get("LONGITUDE", "").replace(",", ".").strip()
-                
-                tsv_writer.writerow([
-                    cod_muni, municipio, uf_upper, tipo, titulo, logradouro,
-                    numero, modificador, bairro, cep, lat_str, lon_str
-                ])
-                count += 1
-                
-                if count % 100000 == 0:
-                    elapsed = time.time() - start_time
-                    speed = count / elapsed if elapsed > 0 else 0
-                    print(f"\rProcessando e inserindo: {count:,} linhas ({speed:.0f} linhas/s)...", end="", flush=True)
-                
-                if limit and count >= limit:
-                    break
-        
-        proc.stdin.close()
-        return_code = proc.wait()
-        if return_code != 0:
-            raise subprocess.CalledProcessError(return_code, psql_cmd)
-        
-        elapsed = time.time() - start_time
-        print(f"\n✅ Total inserido em staging ({stage_table}): {count:,} registros em {elapsed:.1f}s.")
+            copy_sql = (
+                f"COPY {stage_table} (cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro, "
+                "numero, modificador, bairro, cep, latitude, longitude) FROM STDIN "
+                "WITH (FORMAT csv, DELIMITER E'\\t', QUOTE '\"', ESCAPE '\"', NULL '');"
+            )
+            psql_cmd = psql_base_cmd() + ["-c", copy_sql]
 
-    print(f"\nAplicando transação atômica para substituir dados da UF: {uf_upper}...")
-    atomic_swap_sql = f"""
-    BEGIN;
-    DELETE FROM cnefe_enderecos WHERE uf = '{uf_upper}';
-    INSERT INTO cnefe_enderecos (
-        cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro,
-        numero, modificador, bairro, cep, latitude, longitude
-    )
-    SELECT
-        cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro,
-        numero, modificador, bairro, cep, latitude, longitude
-    FROM {stage_table};
-    DROP TABLE IF EXISTS {stage_table};
-    COMMIT;
-    """
-    subprocess.run(psql_base_cmd() + ["-c", atomic_swap_sql], check=True)
+            proc = subprocess.Popen(psql_cmd, stdin=subprocess.PIPE, text=True, bufsize=65536)
+            tsv_writer = csv.writer(proc.stdin, delimiter='\t', lineterminator='\n', quoting=csv.QUOTE_MINIMAL)
+            
+            start_time = time.time()
+            count = 0
+            
+            with z.open(csv_filename, 'r') as raw_file:
+                text_stream = io.TextIOWrapper(raw_file, encoding='utf-8', errors='ignore')
+                reader = csv.DictReader(text_stream, delimiter=';')
+                
+                for row in reader:
+                    cod_muni_str = row.get("COD_MUNICIPIO", "").strip()
+                    if not cod_muni_str:
+                        continue
+                    try:
+                        cod_muni = int(cod_muni_str)
+                    except ValueError:
+                        continue
+                    if not cod_muni:
+                        continue
+                    
+                    logr_base = remove_accents(row.get("NOM_SEGLOGR", ""))
+                    if not logr_base:
+                        continue  # Filter out records without a street name
+                    
+                    muni_info = muni_map.get(cod_muni, ("", uf_upper))
+                    municipio = muni_info[0]
+                    if not municipio:
+                        continue  # Filter out records without a mapped municipality name
+                    
+                    tipo = remove_accents(row.get("NOM_TIPO_SEGLOGR", ""))
+                    titulo = remove_accents(row.get("NOM_TITULO_SEGLOGR", ""))
+                    
+                    if titulo:
+                        logradouro = f"{titulo} {logr_base}".strip()
+                    else:
+                        logradouro = logr_base
+                    
+                    numero = row.get("NUM_ENDERECO", "").strip()
+                    modificador = row.get("DSC_MODIFICADOR", "").strip()
+                    bairro = remove_accents(row.get("DSC_LOCALIDADE", ""))
+                    cep = row.get("CEP", "").strip()
+                    
+                    lat_str = row.get("LATITUDE", "").replace(",", ".").strip()
+                    lon_str = row.get("LONGITUDE", "").replace(",", ".").strip()
+                    
+                    tsv_writer.writerow([
+                        cod_muni, municipio, uf_upper, tipo, titulo, logradouro,
+                        numero, modificador, bairro, cep, lat_str, lon_str
+                    ])
+                    count += 1
+                    
+                    if count % 100000 == 0:
+                        elapsed = time.time() - start_time
+                        speed = count / elapsed if elapsed > 0 else 0
+                        print(f"\rProcessando e inserindo: {count:,} linhas ({speed:.0f} linhas/s)...", end="", flush=True)
+                    
+                    if limit and count >= limit:
+                        break
+            
+            proc.stdin.close()
+            return_code = proc.wait()
+            if return_code != 0:
+                raise subprocess.CalledProcessError(return_code, psql_cmd)
+            
+            elapsed = time.time() - start_time
+            print(f"\n✅ Total inserido em staging ({stage_table}): {count:,} registros em {elapsed:.1f}s.")
 
-    print("Atualizando geometrias espaciais PostGIS e criando índices...")
-    post_import_sql = f"""
-    UPDATE cnefe_enderecos 
-    SET geom = ST_SetSRID(ST_Point(longitude, latitude), 4326) 
-    WHERE uf = '{uf_upper}' AND geom IS NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;
-    
-    CREATE INDEX IF NOT EXISTS idx_cnefe_lookup ON cnefe_enderecos (uf, municipio, logradouro, numero);
-    CREATE INDEX IF NOT EXISTS idx_cnefe_cep ON cnefe_enderecos (cep);
-    CREATE INDEX IF NOT EXISTS idx_cnefe_geom ON cnefe_enderecos USING GIST (geom);
-    CREATE INDEX IF NOT EXISTS idx_cnefe_geog ON cnefe_enderecos USING GIST ((geom::geography));
-    CREATE INDEX IF NOT EXISTS idx_cnefe_logr_trgm ON cnefe_enderecos USING GIN (logradouro gin_trgm_ops);
-    """
-    subprocess.run(psql_base_cmd() + ["-c", post_import_sql], check=True)
-    print(f"✅ Geometrias PostGIS e índices otimizados para {uf_upper} com sucesso!")
-    return count
+        if count == 0:
+            print(f"⚠️ Nenhum registro válido encontrado em {zip_path} para a UF {uf_upper}. Importação abortada e dados existentes preservados.")
+            return 0
+
+        print(f"\nAplicando transação atômica para substituir dados da UF: {uf_upper}...")
+        atomic_swap_sql = f"""
+        BEGIN;
+        DELETE FROM cnefe_enderecos WHERE uf = '{uf_upper}';
+        INSERT INTO cnefe_enderecos (
+            cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro,
+            numero, modificador, bairro, cep, latitude, longitude
+        )
+        SELECT
+            cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro,
+            numero, modificador, bairro, cep, latitude, longitude
+        FROM {stage_table};
+        DROP TABLE IF EXISTS {stage_table};
+        COMMIT;
+        """
+        subprocess.run(psql_base_cmd() + ["-c", atomic_swap_sql], check=True)
+
+        print("Atualizando geometrias espaciais PostGIS e criando índices...")
+        post_import_sql = f"""
+        UPDATE cnefe_enderecos 
+        SET geom = ST_SetSRID(ST_Point(longitude, latitude), 4326) 
+        WHERE uf = '{uf_upper}' AND geom IS NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;
+        
+        CREATE INDEX IF NOT EXISTS idx_cnefe_lookup ON cnefe_enderecos (uf, municipio, logradouro, numero);
+        CREATE INDEX IF NOT EXISTS idx_cnefe_cep ON cnefe_enderecos (cep);
+        CREATE INDEX IF NOT EXISTS idx_cnefe_geom ON cnefe_enderecos USING GIST (geom);
+        CREATE INDEX IF NOT EXISTS idx_cnefe_geog ON cnefe_enderecos USING GIST ((geom::geography));
+        CREATE INDEX IF NOT EXISTS idx_cnefe_logr_trgm ON cnefe_enderecos USING GIN (logradouro gin_trgm_ops);
+        """
+        subprocess.run(psql_base_cmd() + ["-c", post_import_sql], check=True)
+        print(f"✅ Geometrias PostGIS e índices otimizados para {uf_upper} com sucesso!")
+        return count
+    finally:
+        cleanup_sql = f"DROP TABLE IF EXISTS {stage_table};"
+        subprocess.run(psql_base_cmd() + ["-c", cleanup_sql], capture_output=True)
 
 def main() -> None:
     """Main CLI entrypoint for CNEFE address importer."""

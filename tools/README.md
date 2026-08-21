@@ -79,7 +79,7 @@ O script `docker/init.sql` é executado pelo PostgreSQL automaticamente apenas n
 Para aplicar ou atualizar as tabelas e regras do dataset brasileiro em uma base ou contêiner existente sem recriar o cluster:
 
 ```bash
-docker exec -i postgis_br psql -U postgres -d address_db -f /docker-entrypoint-initdb.d/init.sql
+docker exec -i postgis_br psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-address_db}" -f /docker-entrypoint-initdb.d/init.sql
 ```
 
 Caso deseje reiniciar o cluster do zero (apagando os dados atuais):
