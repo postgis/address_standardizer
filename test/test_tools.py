@@ -88,6 +88,25 @@ class TestGenerateBrData(unittest.TestCase):
             if os.path.exists(temp_lex_path):
                 os.remove(temp_lex_path)
 
+    def test_is_custom_default_restoration(self):
+        """Verify that generated SQL datasets reset is_custom default back to true."""
+        mock_ibge = [{"id": 3550308, "nome": "São Paulo"}]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            gaz_path = os.path.join(tmpdir, "test_gaz.sql")
+            lex_path = os.path.join(tmpdir, "test_lex.sql")
+            rules_path = os.path.join(tmpdir, "test_rules.sql")
+
+            generate_br_data.generate_br_gaz_sql(gaz_path, mock_ibge)
+            generate_br_data.generate_br_lex_sql(lex_path)
+            generate_br_data.generate_br_rules_sql(rules_path)
+
+            with open(gaz_path, "r", encoding="utf-8") as f:
+                self.assertIn("ALTER TABLE br_gaz ALTER COLUMN is_custom SET DEFAULT true;", f.read())
+            with open(lex_path, "r", encoding="utf-8") as f:
+                self.assertIn("ALTER TABLE br_lex ALTER COLUMN is_custom SET DEFAULT true;", f.read())
+            with open(rules_path, "r", encoding="utf-8") as f:
+                self.assertIn("ALTER TABLE br_rules ALTER COLUMN is_custom SET DEFAULT true;", f.read())
+
 
 class TestImportCnefe(unittest.TestCase):
     """Tests for import_cnefe.py logic and validation."""

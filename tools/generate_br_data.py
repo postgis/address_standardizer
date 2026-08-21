@@ -405,7 +405,9 @@ def generate_br_lex_sql(output_path: str):
         for seq, word, stdword, tok in unique_entries:
             lines.append(f"({seq}, '{escape_sql(word)}', '{escape_sql(stdword)}', {tok})")
         f.write(",\n".join(lines))
-        f.write("\n)\nSELECT seq, word, stdword, token FROM t;\n")
+        f.write("\n)\nSELECT seq, word, stdword, token FROM t;\n\n")
+        f.write("-- Reset default back to custom so new user entries won't be purged on upgrade\n")
+        f.write("ALTER TABLE br_lex ALTER COLUMN is_custom SET DEFAULT true;\n")
 
     print(f"Generated {output_path} with {len(unique_entries)} lexicon entries.")
 
@@ -489,7 +491,9 @@ def generate_br_gaz_sql(output_path: str, ibge_data: list):
         for seq, word, stdword, tok in unique_gaz:
             lines.append(f"({seq}, '{escape_sql(word)}', '{escape_sql(stdword)}', {tok})")
         f.write(",\n".join(lines))
-        f.write("\n)\nSELECT seq, word, stdword, token FROM t;\n")
+        f.write("\n)\nSELECT seq, word, stdword, token FROM t;\n\n")
+        f.write("-- Reset default back to custom so new user entries won't be purged on upgrade\n")
+        f.write("ALTER TABLE br_gaz ALTER COLUMN is_custom SET DEFAULT true;\n")
 
     print(f"Generated {output_path} with {len(unique_gaz)} gazetteer entries.")
 
@@ -698,6 +702,9 @@ def generate_br_rules_sql(output_path: str):
             outp_str = " ".join(map(str, outp))
             rule_str = f"{inp_str} -1 {outp_str} -1 {rtype} {weight}"
             f.write(f"INSERT INTO br_rules (rule) VALUES ('{rule_str}');\n")
+
+        f.write("\n-- Reset default back to custom so new user entries won't be purged on upgrade\n")
+        f.write("ALTER TABLE br_rules ALTER COLUMN is_custom SET DEFAULT true;\n")
 
     print(f"Generated {output_path} with {len(rules)} rules.")
 
