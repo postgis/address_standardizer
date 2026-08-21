@@ -249,3 +249,6 @@ WITH t(seq,word,stdword,token) AS ( VALUES
 (1, 'VL.', 'VILA', 2)
 )
 SELECT seq, word, stdword, token FROM t;
+
+-- Reset default back to custom so new user entries won't be purged on upgrade
+ALTER TABLE br_lex ALTER COLUMN is_custom SET DEFAULT true;

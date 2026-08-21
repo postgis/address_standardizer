@@ -105,3 +105,6 @@ INSERT INTO br_rules (rule) VALUES ('11 -1 11 -1 0 10');
 INSERT INTO br_rules (rule) VALUES ('11 12 -1 11 12 -1 0 12');
 INSERT INTO br_rules (rule) VALUES ('0 -1 13 -1 0 14');
 INSERT INTO br_rules (rule) VALUES ('0 0 -1 13 13 -1 0 14');
+
+-- Reset default back to custom so new user entries won't be purged on upgrade
+ALTER TABLE br_rules ALTER COLUMN is_custom SET DEFAULT true;

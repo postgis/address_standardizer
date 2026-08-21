@@ -15323,3 +15323,6 @@ WITH t(seq,word,stdword,token) AS ( VALUES
 (2, 'ÓLEO', 'OLEO', 1)
 )
 SELECT seq, word, stdword, token FROM t;
+
+-- Reset default back to custom so new user entries won't be purged on upgrade
+ALTER TABLE br_gaz ALTER COLUMN is_custom SET DEFAULT true;
