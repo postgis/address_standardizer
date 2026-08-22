@@ -447,8 +447,8 @@ class TestImportCnefe(unittest.TestCase):
                 csv_data = "COD_MUNICIPIO;NOM_SEGLOGR;NOM_TIPO_SEGLOGR;NOM_TITULO_SEGLOGR;NUM_ENDERECO;DSC_MODIFICADOR;DSC_LOCALIDADE;CEP;LATITUDE;LONGITUDE\n3550308;;RUA;;100;;CENTRO;01001000;-23.55;-46.63\n"
                 z.writestr("test.csv", csv_data)
 
-            with patch("tools.import_cnefe.ensure_tables_exist"):
-                with patch("tools.import_cnefe.get_municipality_map", return_value={3550308: ("SAO PAULO", "SP")}):
+            with patch("import_cnefe.ensure_tables_exist"):
+                with patch("import_cnefe.get_municipality_map", return_value={3550308: ("SAO PAULO", "SP")}):
                     res = import_cnefe.import_cnefe_to_postgres(zip_path, "SP")
                     self.assertEqual(res, 0)
 
