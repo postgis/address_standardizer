@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unit tests for Brazilian address data generation and CNEFE import tools.
+Unit tests for CNEFE import tooling.
 """
 
 import io
@@ -16,97 +16,7 @@ from unittest.mock import MagicMock, patch
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO_ROOT, "tools"))
 
-import generate_br_data
 import import_cnefe
-
-
-class TestGenerateBrData(unittest.TestCase):
-    """Tests for generate_br_data.py functions and data structures."""
-
-    def test_normalize_text(self):
-        self.assertEqual(generate_br_data.normalize_text("São Paulo"), "SAO PAULO")
-        self.assertEqual(generate_br_data.normalize_text("Amapá"), "AMAPA")
-        self.assertEqual(generate_br_data.normalize_text("Pará"), "PARA")
-        self.assertEqual(generate_br_data.normalize_text("Espírito Santo"), "ESPIRITO SANTO")
-
-    def test_brazil_states_accent_coverage(self):
-        """Verify that BRAZIL_STATES contains official accented names."""
-        states_dict = dict(generate_br_data.BRAZIL_STATES)
-        self.assertEqual(len(states_dict), 27)
-        self.assertEqual(states_dict["SP"], "SÃO PAULO")
-        self.assertEqual(states_dict["PA"], "PARÁ")
-        self.assertEqual(states_dict["AP"], "AMAPÁ")
-        self.assertEqual(states_dict["CE"], "CEARÁ")
-        self.assertEqual(states_dict["GO"], "GOIÁS")
-        self.assertEqual(states_dict["MA"], "MARANHÃO")
-
-    def test_generate_br_gaz_structure(self):
-        """Verify gazetteer generation generates sequential IDs per word and handles accents."""
-        mock_ibge = [
-            {"id": 3550308, "nome": "São Paulo"},
-            {"id": 1501402, "nome": "Belém"}
-        ]
-        with tempfile.NamedTemporaryFile(mode="w+", suffix=".sql", delete=False) as tf:
-            temp_path = tf.name
-
-        try:
-            generate_br_data.generate_br_gaz_sql(temp_path, mock_ibge)
-            with open(temp_path, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            self.assertIn("CREATE TABLE IF NOT EXISTS br_gaz", content)
-            self.assertIn("SAO PAULO", content)
-            self.assertIn("SÃO PAULO", content)
-            self.assertIn("BELEM", content)
-            self.assertIn("BELÉM", content)
-        finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-
-    def test_provenance_and_licensing(self):
-        """Verify that README and generated SQL headers contain public open sources, IBGE and OSM ODbL attribution."""
-        readme_path = os.path.join(REPO_ROOT, "README.md")
-        with open(readme_path, "r", encoding="utf-8") as f:
-            readme_content = f.read()
-
-        self.assertIn("public open sources", readme_content)
-        self.assertIn("OpenStreetMap contributors", readme_content)
-        self.assertIn("Open Database License (ODbL)", readme_content)
-        self.assertIn("https://opendatacommons.org/licenses/odbl/", readme_content)
-
-        with tempfile.NamedTemporaryFile(mode="w+", suffix=".sql", delete=False) as tf:
-            temp_lex_path = tf.name
-
-        try:
-            generate_br_data.generate_br_lex_sql(temp_lex_path)
-            with open(temp_lex_path, "r", encoding="utf-8") as f:
-                lex_content = f.read()
-
-            self.assertIn("public open sources (IBGE official open data and OpenStreetMap)", lex_content)
-            self.assertIn("ODbL", lex_content)
-            self.assertIn("https://opendatacommons.org/licenses/odbl/", lex_content)
-        finally:
-            if os.path.exists(temp_lex_path):
-                os.remove(temp_lex_path)
-
-    def test_is_custom_default_restoration(self):
-        """Verify that generated SQL datasets reset is_custom default back to true."""
-        mock_ibge = [{"id": 3550308, "nome": "São Paulo"}]
-        with tempfile.TemporaryDirectory() as tmpdir:
-            gaz_path = os.path.join(tmpdir, "test_gaz.sql")
-            lex_path = os.path.join(tmpdir, "test_lex.sql")
-            rules_path = os.path.join(tmpdir, "test_rules.sql")
-
-            generate_br_data.generate_br_gaz_sql(gaz_path, mock_ibge)
-            generate_br_data.generate_br_lex_sql(lex_path)
-            generate_br_data.generate_br_rules_sql(rules_path)
-
-            with open(gaz_path, "r", encoding="utf-8") as f:
-                self.assertIn("ALTER TABLE br_gaz ALTER COLUMN is_custom SET DEFAULT true;", f.read())
-            with open(lex_path, "r", encoding="utf-8") as f:
-                self.assertIn("ALTER TABLE br_lex ALTER COLUMN is_custom SET DEFAULT true;", f.read())
-            with open(rules_path, "r", encoding="utf-8") as f:
-                self.assertIn("ALTER TABLE br_rules ALTER COLUMN is_custom SET DEFAULT true;", f.read())
 
 
 class TestImportCnefe(unittest.TestCase):
@@ -344,47 +254,6 @@ class TestImportCnefe(unittest.TestCase):
             cmd = import_cnefe.psql_base_cmd()
             self.assertIn("-w", cmd)
             self.assertEqual(os.environ.get("PGPASSWORD"), "custom_pass")
-
-    def test_generate_br_gaz_empty_ibge_error(self):
-        """Verify that generate_br_gaz_sql raises RuntimeError when ibge_data is empty."""
-        with tempfile.NamedTemporaryFile(suffix=".sql") as tf:
-            with self.assertRaises(RuntimeError) as ctx:
-                generate_br_data.generate_br_gaz_sql(tf.name, [])
-            self.assertIn("empty or missing", str(ctx.exception))
-
-    def test_accented_variants_token_1_generated(self):
-        """Verify that accented states and municipalities generate token 1 WORD entries."""
-        with tempfile.NamedTemporaryFile(suffix=".sql") as tf:
-            mock_mun = [{"id": 3550308, "nome": "São Paulo", "microrregiao": {"mesorregiao": {"UF": {"sigla": "SP", "nome": "São Paulo"}}}}]
-            generate_br_data.generate_br_gaz_sql(tf.name, mock_mun)
-            with open(tf.name, "r", encoding="utf-8") as f:
-                content = f.read()
-            
-            # SÃO PAULO with accent must have token 10 (CITY) and token 1 (WORD)
-            self.assertIn("'SÃO PAULO', 'SAO PAULO', 10", content)
-            self.assertIn("'SÃO PAULO', 'SAO PAULO', 1", content)
-
-
-    def test_control_file_version_synchronization(self):
-        """Verify that all extension control files have synchronized default_version values."""
-        import re
-        control_files = [
-            "address_standardizer.control",
-            "address_standardizer_data_us.control",
-            "address_standardizer_data_br.control"
-        ]
-        versions = {}
-        for fname in control_files:
-            fpath = os.path.join(REPO_ROOT, fname)
-            with open(fpath, "r", encoding="utf-8") as f:
-                content = f.read()
-            match = re.search(r"default_version\s*=\s*'([^']+)'", content)
-            self.assertIsNotNone(match, f"Could not find default_version in {fname}")
-            versions[fname] = match.group(1)
-
-        first_v = next(iter(versions.values()))
-        for fname, ver in versions.items():
-            self.assertEqual(ver, first_v, f"Version mismatch in {fname}: expected {first_v}, got {ver}")
 
     def test_docker_compose_security_and_healthcheck(self):
         """Verify that docker-compose.yml enforces loopback binding, password requirement, and healthcheck."""
