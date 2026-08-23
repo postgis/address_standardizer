@@ -51,6 +51,7 @@ EXTRA_CLEAN = \
 	data/$(EXTENSION)_core.sql \
 	data/$(DATA_EXTENSION)_core.sql \
 	test/rules_api_test \
+	test/rules_api_test.exe \
 	$(DISTARCHIVE)
 
 ifdef DEBUG
@@ -94,8 +95,15 @@ include $(PGXS)
 test-rules-api: test/rules_api_test
 	./test/rules_api_test
 
-test/rules_api_test: test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_tools.c src/pagc_api.h src/pagc_std_api.h src/gamma.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(PG_CPPFLAGS) -ffunction-sections -Isrc -I$(shell $(PG_CONFIG) --includedir-server) -o $@ test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_tools.c -Wl,--gc-sections -L$(shell $(PG_CONFIG) --pkglibdir) -lpgcommon -lpgport
+# gettext() lives in libc on glibc/Linux; other ports with NLS need -lintl
+ifeq ($(enable_nls),yes)
+ifneq ($(PORTNAME),linux)
+RULES_API_TEST_LIBS = -lintl
+endif
+endif
+
+test/rules_api_test: test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_tools.c src/standard.c src/tokenize.c src/lexicon.c src/hash.c src/analyze.c src/export.c src/pagc_api.h src/pagc_std_api.h src/gamma.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(PG_CPPFLAGS) -ffunction-sections -Isrc -I$(shell $(PG_CONFIG) --includedir-server) -o $@ test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_tools.c src/standard.c src/tokenize.c src/lexicon.c src/hash.c src/analyze.c src/export.c -Wl,--gc-sections -L$(shell $(PG_CONFIG) --pkglibdir) -lpgcommon -lpgport $(RULES_API_TEST_LIBS)
 
 installcheck: test-rules-api
 

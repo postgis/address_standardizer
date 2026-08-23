@@ -1,6 +1,6 @@
 # address_standardizer extension
 
-[![CI](https://github.com/postgis/address_standardizer/workflows/CI/badge.svg)](https://github.com/postgis/address_standardizer/actions)
+GitHub: [![CI](https://github.com/postgis/address_standardizer/workflows/CI/badge.svg)](https://github.com/postgis/address_standardizer/actions) Winnie: [![Build Status](https://winnie.postgis.net/job/address_standardizer_main/badge/icon)](https://winnie.postgis.net/job/address_standardizer_main/)
 
 This is a fork of the [PAGC standardizer](http://www.pagcgeo.org/) and single line address parser.
 The code is built into a single PostgreSQL extension library.
@@ -136,7 +136,7 @@ src/
 
 ## How the Parser Works
 
-The parser works from right to left looking first at the macro elements 
+The parser works from right to left looking first at the macro elements
 for postcode, state/province, city, and then looks micro elements to determine
 if we are dealing with a house number street or intersection or landmark.
 It currently does not look for a country code or name, but that could be
@@ -192,7 +192,7 @@ and USPS city names.
 usps-st-city-orig.txt  - this file contains all the acceptable USPS city
                          names by state. I periodically extract these from the
                          USPS and generate this file. I do NOT recommend
-                         editing this file. 
+                         editing this file.
 usps-st-city-adds.txt  - this file you can add new definitions to if you need
                          them. The format of both these files is:
                          <StateAbbrev><tab><CityName>
