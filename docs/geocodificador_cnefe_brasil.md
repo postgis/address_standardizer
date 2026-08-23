@@ -105,6 +105,7 @@ SELECT
 FROM cnefe_enderecos c, parsed p
 WHERE c.uf = p.state
   AND c.municipio = p.city
+  AND c.tipo = p.pretype
   AND c.logradouro = p.name
   AND c.numero = p.house_num
 LIMIT 1;

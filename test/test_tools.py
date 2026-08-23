@@ -55,7 +55,7 @@ class TestImportCnefe(unittest.TestCase):
             with patch("subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(stdout="0\n")
                 with self.assertRaises(FileNotFoundError):
-                    import_cnefe.import_cnefe_to_postgres(zip_path, "PA")
+                    import_cnefe.import_cnefe_to_postgres(zip_path, "PA", muni_map={})
         finally:
             if os.path.exists(zip_path):
                 os.remove(zip_path)
@@ -235,6 +235,9 @@ class TestImportCnefe(unittest.TestCase):
         self.assertIn("c.geom::geography <->", docs_content)
         self.assertIn("ST_DWithin(c.geom::geography", docs_content)
 
+        # Exact geocoding must disambiguate streets that share a name and number.
+        self.assertIn("AND c.tipo = p.pretype", docs_content)
+
     def test_psql_base_cmd_host_mode_w_flag(self):
         """Verify that psql_base_cmd includes -w flag in direct host mode and sets PGPASSWORD."""
         with patch.dict(os.environ, {"POSTGRES_HOST": "localhost", "POSTGRES_PORT": "5433", "POSTGRES_PASSWORD": "secret_password"}, clear=True):
@@ -278,8 +281,21 @@ class TestImportCnefe(unittest.TestCase):
 
         self.assertIn("-f /docker-entrypoint-initdb.d/init.sql", init_content)
         self.assertIn("-f /docker-entrypoint-initdb.d/init.sql", tools_readme_content)
+        self.assertIn("sh -c 'psql -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"", init_content)
+        self.assertIn("sh -c 'psql -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"", tools_readme_content)
         self.assertIn('rm -rf -- "${POSTGRES_DATA_DIR:-./.pgdata}"', init_content)
         self.assertIn('rm -rf -- "${POSTGRES_DATA_DIR:-./.pgdata}"', tools_readme_content)
+
+    def test_docker_init_omits_extension_only_metadata_script(self):
+        """Raw Docker initialization must not call pg_extension_config_dump."""
+        init_sql_path = os.path.join(REPO_ROOT, "docker", "init.sql")
+        with open(init_sql_path, "r", encoding="utf-8") as f:
+            init_content = f.read()
+
+        self.assertIn("\\i /sql/23_br_lex.sql", init_content)
+        self.assertIn("\\i /sql/24_br_gaz.sql", init_content)
+        self.assertIn("\\i /sql/25_br_rules.sql", init_content)
+        self.assertNotIn("26_br_data_extension.sql", init_content)
 
     def test_generate_uuid7(self):
         """Verify that generate_uuid7 produces valid RFC 9562 UUIDv7 strings."""
