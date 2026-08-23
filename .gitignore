@@ -3,9 +3,11 @@
 *.dylib
 *.dll
 *.a
+*.exe
 data/*.sql
 test/regression.diffs
 test/regression.out
 test/results/*.out
 test/results/*.diff
 *.tar.gz
+*.deps
