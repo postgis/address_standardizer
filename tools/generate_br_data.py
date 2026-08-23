@@ -2,7 +2,7 @@
 """
 Generator for PostGIS address_standardizer Brazilian Dataset (address_standardizer_data_br)
 Data Sources & Provenance:
-  - IBGE (Instituto Brasileiro de Geografia e Estatística): Official government open data from Localidades API & CNEFE 2022.
+  - IBGE (Instituto Brasileiro de Geografia e Estatística): Official government open data from the Localidades API.
   - OpenStreetMap: Community open terminology for Brazilian street types and qualifiers (© OpenStreetMap contributors, ODbL).
 Note:
   This dataset is strictly constructed from public open sources (IBGE and OpenStreetMap).
@@ -310,14 +310,14 @@ BRAZIL_STATES = [
 ]
 
 def fetch_ibge_municipalities():
-    """Fetches all 5,571 Brazilian municipalities from the official IBGE Open Data API."""
+    """Fetches Brazilian municipalities from the official IBGE Open Data API."""
     url = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
 
     print(f"Fetching IBGE municipalities from {url}...")
     try:
         req = urllib.request.Request(url, headers={
             'User-Agent': 'PostGIS-Address-Standardizer-BR-Generator/1.0',
-            'Accept-Encoding': 'gzip, deflate'
+            'Accept-Encoding': 'gzip'
         })
         with urllib.request.urlopen(req, timeout=30) as response:
             raw_data = response.read()
@@ -715,6 +715,9 @@ def generate_br_data_extension_sql(output_path: str):
         f.write("SELECT pg_catalog.pg_extension_config_dump('br_lex', 'WHERE is_custom');\n")
         f.write("SELECT pg_catalog.pg_extension_config_dump('br_rules', 'WHERE is_custom');\n")
         f.write("SELECT pg_catalog.pg_extension_config_dump('br_gaz', 'WHERE is_custom');\n")
+        f.write("SELECT pg_catalog.pg_extension_config_dump('br_lex_id_seq', '');\n")
+        f.write("SELECT pg_catalog.pg_extension_config_dump('br_rules_id_seq', '');\n")
+        f.write("SELECT pg_catalog.pg_extension_config_dump('br_gaz_id_seq', '');\n")
     print(f"Generated {output_path}.")
 
 def main():

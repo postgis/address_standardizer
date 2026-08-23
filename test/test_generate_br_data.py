@@ -6,6 +6,7 @@ import re
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO_ROOT, "tools"))
@@ -66,6 +67,9 @@ class TestGenerateBrData(unittest.TestCase):
         self.assertIn("OpenStreetMap contributors", readme_content)
         self.assertIn("Open Database License (ODbL)", readme_content)
         self.assertIn("https://opendatacommons.org/licenses/odbl/", readme_content)
+        self.assertIn("Public API for Localidades", readme_content)
+        self.assertNotIn("CNEFE", readme_content)
+        self.assertNotIn("5,571", readme_content)
 
         with tempfile.NamedTemporaryFile(mode="w+", suffix=".sql", delete=False) as tf:
             temp_lex_path = tf.name
@@ -81,6 +85,42 @@ class TestGenerateBrData(unittest.TestCase):
         finally:
             if os.path.exists(temp_lex_path):
                 os.remove(temp_lex_path)
+
+    def test_ibge_fetch_advertises_only_supported_compression(self):
+        """The request must not advertise encodings that the reader does not decode."""
+        response = mock.MagicMock()
+        response.read.return_value = b"[]"
+        response.headers.get.return_value = None
+        response.__enter__.return_value = response
+        response.__exit__.return_value = None
+
+        with mock.patch.object(generate_br_data.urllib.request, "urlopen", return_value=response) as urlopen:
+            self.assertEqual(generate_br_data.fetch_ibge_municipalities(), [])
+
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.get_header("Accept-encoding"), "gzip")
+
+    def test_generate_br_data_extension_sql_dumps_custom_rows_and_sequences(self):
+        """Extension upgrades preserve custom rows and the IDs allocated by serial sequences."""
+        with tempfile.NamedTemporaryFile(mode="w+", suffix=".sql", delete=False) as tf:
+            temp_path = tf.name
+
+        try:
+            generate_br_data.generate_br_data_extension_sql(temp_path)
+            with open(temp_path, "r", encoding="utf-8") as f:
+                self.assertEqual(
+                    f.read().splitlines(),
+                    [
+                        "SELECT pg_catalog.pg_extension_config_dump('br_lex', 'WHERE is_custom');",
+                        "SELECT pg_catalog.pg_extension_config_dump('br_rules', 'WHERE is_custom');",
+                        "SELECT pg_catalog.pg_extension_config_dump('br_gaz', 'WHERE is_custom');",
+                        "SELECT pg_catalog.pg_extension_config_dump('br_lex_id_seq', '');",
+                        "SELECT pg_catalog.pg_extension_config_dump('br_rules_id_seq', '');",
+                        "SELECT pg_catalog.pg_extension_config_dump('br_gaz_id_seq', '');",
+                    ],
+                )
+        finally:
+            os.remove(temp_path)
 
     def test_is_custom_default_restoration(self):
         """Verify that generated SQL datasets reset is_custom default back to true."""

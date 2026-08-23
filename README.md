@@ -74,13 +74,13 @@ psql -d address_db -c "CREATE EXTENSION address_standardizer"
 The extension supports datasets for different countries:
 
 * `address_standardizer_data_us`: United States address dataset (USPS based lexicon and gazetteer).
-* `address_standardizer_data_br`: Brazilian address dataset (IBGE / OpenStreetMap based lexicon, gazetteer of all 5,571 municipalities, 27 states, and Brazilian address grammar rules).
+* `address_standardizer_data_br`: Brazilian address dataset (IBGE / OpenStreetMap based lexicon, municipality and state gazetteer, and Brazilian address grammar rules).
 
 ### Open Data Provenance for Brazil Dataset (`address_standardizer_data_br`)
 
 > **Data Provenance & Licensing Statement:**
 > The `address_standardizer_data_br` dataset is constructed exclusively from public open sources:
-> * **IBGE (Instituto Brasileiro de Geografia e Estatística):** Official government open data from the Public API for Localidades (5,571 Brazilian Municipalities and 27 Federative Units / States) and CNEFE 2022 (Cadastro Nacional de Endereços para Fins Estatísticos) under open government data terms.
+> * **IBGE (Instituto Brasileiro de Geografia e Estatística):** Official government open data from the Public API for Localidades (Brazilian municipalities and 27 Federative Units / States) under open government data terms.
 > * **OpenStreetMap (OSM):** Community open terminology for Brazilian thoroughfare and unit types, © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), licensed under the [Open Data Commons Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/).
 >
 > *No proprietary or copyrighted postal databases (such as Empresa Brasileira de Correios e Telégrafos - DNE) are used.*
