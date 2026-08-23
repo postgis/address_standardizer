@@ -84,7 +84,11 @@ docker exec -i postgis_br sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /
 
 Caso deseje reiniciar o cluster do zero (apagando os dados atuais):
 ```bash
-# Apague a pasta de dados configurada em POSTGRES_DATA_DIR (ou fallback ./.pgdata)
-docker compose down && rm -rf -- "${POSTGRES_DATA_DIR:-./.pgdata}" && docker compose up -d
+# Execute a partir da raiz do repositório. Carregue .env antes de expandir POSTGRES_DATA_DIR.
+set -a
+. ./.env
+set +a
+docker compose down
+rm -rf -- "${POSTGRES_DATA_DIR:-./.pgdata}"
+docker compose up -d
 ```
-

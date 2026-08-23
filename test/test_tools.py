@@ -22,6 +22,14 @@ import import_cnefe
 class TestImportCnefe(unittest.TestCase):
     """Tests for import_cnefe.py logic and validation."""
 
+    @staticmethod
+    def cnefe_zip_bytes() -> bytes:
+        """Returns a small valid CNEFE-shaped ZIP archive for download tests."""
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_STORED) as archive:
+            archive.writestr("cnefe.csv", "COD_MUNICIPIO;NOM_SEGLOGR\n")
+        return buffer.getvalue()
+
     def test_remove_accents(self):
         self.assertEqual(import_cnefe.remove_accents("Belém"), "BELEM")
         self.assertEqual(import_cnefe.remove_accents("São João d'Aliança"), "SAO JOAO D'ALIANCA")
@@ -74,7 +82,7 @@ class TestImportCnefe(unittest.TestCase):
     def test_row_filtering_and_parsing(self):
         """Verify that records with empty street name, unmapped municipality, or missing IBGE code are skipped."""
         csv_data = (
-            "COD_MUNICIPIO;NOM_TIPO_SEGLOGR;NOM_TITULO_SEGLOGR;NOM_SEGLOGR;NUM_ENDERECO;DSC_MODIFICADOR;DSC_LOCALIDADE;CEP;LATITUDE;LONGITUDE\n"
+            "COD_MUNICIPIO;NOM_TIPO_SEGLOGR;NOM_TITULO_SEGLOGR;NOM_SEGLOGR;NUM_ENDERECO;DSC_MODIFICADOR;DSC_LOCALIDADE;CEP;NUM_LATITUDE;NUM_LONGITUDE\n"
             "3550308;RUA;;AUGUSTA;100;APTO 12;CENTRO;01304-000;-23.5532;-46.6521\n"
             "3550308;RUA;;;100;;;;;\n"  # Missing NOM_SEGLOGR -> must be skipped
             ";RUA;;PAULISTA;100;;;;;\n"  # Missing COD_MUNICIPIO -> must be skipped
@@ -112,6 +120,7 @@ class TestImportCnefe(unittest.TestCase):
             written_lines = [line.strip().split("\t") for line in all_text.strip().split("\n") if line.strip()]
             self.assertEqual(len(written_lines), 2)
             self.assertEqual(written_lines[0][5], "AUGUSTA")
+            self.assertEqual(written_lines[0][10:12], ["-23.5532", "-46.6521"])
             self.assertEqual(written_lines[1][5], "DOUTOR ARNALDO")
         finally:
             if os.path.exists(zip_path):
@@ -139,7 +148,7 @@ class TestImportCnefe(unittest.TestCase):
     def test_download_cnefe_success_and_absent_content_length(self):
         """Verify successful download promotion when Content-Length matches or is absent."""
         mock_resp = MagicMock()
-        data = b"full_cnefe_file_content"
+        data = self.cnefe_zip_bytes()
         mock_resp.headers = {"Content-Length": str(len(data))}
         mock_resp.read.side_effect = [data, b""]
         mock_resp.__enter__.return_value = mock_resp
@@ -151,6 +160,43 @@ class TestImportCnefe(unittest.TestCase):
                 self.assertTrue(os.path.exists(dest))
                 with open(dest, "rb") as f:
                     self.assertEqual(f.read(), data)
+
+    def test_download_cnefe_rejects_invalid_zip_without_content_length(self):
+        """Verify a corrupt chunked response is not promoted into the cache."""
+        mock_resp = MagicMock()
+        mock_resp.headers = {}
+        mock_resp.read.side_effect = [b"not a ZIP archive", b""]
+        mock_resp.__enter__.return_value = mock_resp
+        mock_resp.__exit__.return_value = False
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("urllib.request.urlopen", return_value=mock_resp):
+                with self.assertRaises(IOError) as ctx:
+                    import_cnefe.download_cnefe("PA", temp_dir)
+            self.assertIn("não foi salvo em cache", str(ctx.exception))
+            self.assertFalse(os.path.exists(os.path.join(temp_dir, "15_PA.zip.tmp")))
+            self.assertFalse(os.path.exists(os.path.join(temp_dir, "15_PA.zip")))
+
+    def test_download_cnefe_replaces_invalid_cached_zip(self):
+        """Verify an invalid large cache entry is discarded and recovered automatically."""
+        data = self.cnefe_zip_bytes()
+        mock_resp = MagicMock()
+        mock_resp.headers = {"Content-Length": str(len(data))}
+        mock_resp.read.side_effect = [data, b""]
+        mock_resp.__enter__.return_value = mock_resp
+        mock_resp.__exit__.return_value = False
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_path = os.path.join(temp_dir, "15_PA.zip")
+            with open(cache_path, "wb") as cache:
+                cache.write(b"not a ZIP archive" * 70_000)
+
+            with patch("urllib.request.urlopen", return_value=mock_resp) as mock_urlopen:
+                dest = import_cnefe.download_cnefe("PA", temp_dir)
+
+            mock_urlopen.assert_called_once()
+            with open(dest, "rb") as cache:
+                self.assertEqual(cache.read(), data)
 
         # Test absent Content-Length
         mock_resp_no_len = MagicMock()
@@ -283,6 +329,8 @@ class TestImportCnefe(unittest.TestCase):
         self.assertIn("-f /docker-entrypoint-initdb.d/init.sql", tools_readme_content)
         self.assertIn("sh -c 'psql -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"", init_content)
         self.assertIn("sh -c 'psql -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"", tools_readme_content)
+        self.assertIn('set -a; . ./.env; set +a', init_content)
+        self.assertIn('set -a\n. ./.env\nset +a', tools_readme_content)
         self.assertIn('rm -rf -- "${POSTGRES_DATA_DIR:-./.pgdata}"', init_content)
         self.assertIn('rm -rf -- "${POSTGRES_DATA_DIR:-./.pgdata}"', tools_readme_content)
 
@@ -303,13 +351,27 @@ class TestImportCnefe(unittest.TestCase):
         u = uuid.UUID(u_str)
         self.assertEqual(u.version, 7)
 
+    def test_stage_table_name_keeps_uuid_random_bits(self):
+        """Imports in one UUIDv7 millisecond must not share a staging table."""
+        with patch("import_cnefe.generate_uuid7", side_effect=[
+            "018f0f00-0000-7000-8000-000000000001",
+            "018f0f00-0000-7000-8000-000000000002",
+        ]):
+            first = import_cnefe.stage_table_name("SP")
+            second = import_cnefe.stage_table_name("SP")
+
+        self.assertNotEqual(first, second)
+        self.assertTrue(first.endswith("8000000000000001"))
+        self.assertTrue(second.endswith("8000000000000002"))
+
     def test_isolated_per_uf_staging_table(self):
         """Verify that import_cnefe.py creates and uses isolated unique staging tables to avoid concurrency conflicts."""
         import_cnefe_path = os.path.join(REPO_ROOT, "tools", "import_cnefe.py")
         with open(import_cnefe_path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        self.assertIn('stage_table = f"cnefe_stage_{uf_upper.lower()}_{run_id}"', content)
+        self.assertIn('stage_table = stage_table_name(uf_upper)', content)
+        self.assertIn('run_id = generate_uuid7().replace("-", "")', content)
         self.assertIn('DROP TABLE IF EXISTS {stage_table}', content)
         self.assertIn('finally:', content)
 
@@ -346,6 +408,50 @@ class TestImportCnefe(unittest.TestCase):
         finally:
             if os.path.exists(zip_path):
                 os.remove(zip_path)
+
+    def test_atomic_swap_inserts_geometry_before_commit(self):
+        """A reader must never see freshly swapped rows without their geometry."""
+        csv_data = (
+            "COD_MUNICIPIO;NOM_SEGLOGR;NUM_LATITUDE;NUM_LONGITUDE\n"
+            "3550308;AUGUSTA;-23.5532;-46.6521\n"
+        )
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tf:
+            zip_path = tf.name
+
+        try:
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                archive.writestr("test.csv", csv_data)
+
+            mock_proc = MagicMock()
+            mock_proc.stdin = io.StringIO()
+            mock_proc.wait.return_value = 0
+            with patch("subprocess.run") as mock_run, \
+                 patch("subprocess.Popen", return_value=mock_proc):
+                mock_run.return_value = MagicMock(stdout="0\n")
+                import_cnefe.import_cnefe_to_postgres(
+                    zip_path, "SP", muni_map={3550308: ("SAO PAULO", "SP")}
+                )
+
+            sql_commands = [" ".join(call.args[0]) for call in mock_run.call_args_list if call.args]
+            swap_sql = next(sql for sql in sql_commands if "DELETE FROM cnefe_enderecos WHERE uf = 'SP'" in sql)
+            self.assertIn("latitude, longitude, geom", swap_sql)
+            self.assertIn("ST_SetSRID(ST_Point(longitude, latitude), 4326)", swap_sql)
+            self.assertIn("COMMIT", swap_sql)
+            self.assertFalse(any("UPDATE cnefe_enderecos" in sql for sql in sql_commands))
+        finally:
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
+
+    def test_positive_limit_validation(self):
+        """The CLI parser and library reject zero or negative row limits."""
+        for value in ("0", "-1"):
+            with self.assertRaises(SystemExit):
+                with patch.object(sys, "argv", ["import_cnefe.py", "--limit", value]):
+                    import_cnefe.main()
+
+        for value in (0, -1):
+            with self.assertRaises(ValueError):
+                import_cnefe.import_cnefe_to_postgres("/tmp/fake.zip", "SP", limit=value)
 
 
 if __name__ == "__main__":

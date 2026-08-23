@@ -130,6 +130,18 @@ def get_municipality_map() -> dict:
     except Exception as e:
         raise RuntimeError(f"Não foi possível obter o mapeamento de municípios do IBGE: {e}") from e
 
+
+def validate_cnefe_zip(zip_path: str) -> bool:
+    """Returns whether a downloaded CNEFE archive is readable and contains a CSV."""
+    try:
+        with zipfile.ZipFile(zip_path, "r") as archive:
+            if not any(name.lower().endswith(".csv") for name in archive.namelist()):
+                return False
+            return archive.testzip() is None
+    except (OSError, zipfile.BadZipFile):
+        return False
+
+
 def download_cnefe(uf: str, dest_dir: str) -> str:
     """Downloads official CNEFE zip file from IBGE with atomic file writing."""
     uf_upper = uf.upper()
@@ -144,8 +156,11 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
     tmp_path = dest_path + ".tmp"
 
     if os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000000:
-        print(f"Arquivo já existe em cache: {dest_path} ({os.path.getsize(dest_path)/(1024*1024):.2f} MB)")
-        return dest_path
+        if validate_cnefe_zip(dest_path):
+            print(f"Arquivo já existe em cache: {dest_path} ({os.path.getsize(dest_path)/(1024*1024):.2f} MB)")
+            return dest_path
+        print(f"Arquivo em cache inválido; baixando novamente: {dest_path}")
+        os.remove(dest_path)
 
     url = f"https://ftp.ibge.gov.br/Cadastro_Nacional_de_Enderecos_para_Fins_Estatisticos/Censo_Demografico_2022/Arquivos_CNEFE/CSV/UF/{filename}"
     print(f"Baixando CNEFE oficial do IBGE para {uf_upper}: {url}")
@@ -177,6 +192,10 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
             except OSError:
                 pass
         raise IOError(f"Download truncado para {uf_upper}: recebidos {downloaded} bytes de {total_size} bytes esperados.")
+
+    if not validate_cnefe_zip(tmp_path):
+        os.remove(tmp_path)
+        raise IOError(f"Download inválido ou corrompido para {uf_upper}; arquivo ZIP não foi salvo em cache.")
 
     os.replace(tmp_path, dest_path)
     elapsed = time.time() - start_time
@@ -223,6 +242,13 @@ def ensure_tables_exist() -> None:
     """
     subprocess.run(psql_base_cmd() + ["-c", sql], check=True)
 
+
+def stage_table_name(uf: str) -> str:
+    """Returns a PostgreSQL-safe, collision-resistant staging-table name."""
+    run_id = generate_uuid7().replace("-", "")
+    return f"cnefe_stage_{uf.lower()}_{run_id}"
+
+
 def import_cnefe_to_postgres(
     zip_path: str,
     uf: str,
@@ -233,6 +259,8 @@ def import_cnefe_to_postgres(
     uf_upper = uf.upper()
     if uf_upper not in UF_CODE_MAP:
         raise ValueError(f"UF inválida: {uf}")
+    if limit is not None and limit <= 0:
+        raise ValueError("--limit deve ser um número inteiro positivo.")
 
     ensure_tables_exist()
 
@@ -251,8 +279,7 @@ def import_cnefe_to_postgres(
     if muni_map is None:
         muni_map = get_municipality_map()
 
-    run_id = generate_uuid7().replace("-", "")[:12]
-    stage_table = f"cnefe_stage_{uf_upper.lower()}_{run_id}"
+    stage_table = stage_table_name(uf_upper)
     print(f"Preparando importação para UF: {uf_upper} (tabela temporária: {stage_table})...")
     create_stage_sql = f"""
     CREATE UNLOGGED TABLE IF NOT EXISTS {stage_table} (
@@ -331,8 +358,8 @@ def import_cnefe_to_postgres(
                     bairro = remove_accents(row.get("DSC_LOCALIDADE", ""))
                     cep = row.get("CEP", "").strip()
                     
-                    lat_str = row.get("LATITUDE", "").replace(",", ".").strip()
-                    lon_str = row.get("LONGITUDE", "").replace(",", ".").strip()
+                    lat_str = row.get("NUM_LATITUDE", "").replace(",", ".").strip()
+                    lon_str = row.get("NUM_LONGITUDE", "").replace(",", ".").strip()
                     
                     tsv_writer.writerow([
                         cod_muni, municipio, uf_upper, tipo, titulo, logradouro,
@@ -345,7 +372,7 @@ def import_cnefe_to_postgres(
                         speed = count / elapsed if elapsed > 0 else 0
                         print(f"\rProcessando e inserindo: {count:,} linhas ({speed:.0f} linhas/s)...", end="", flush=True)
                     
-                    if limit and count >= limit:
+                    if limit is not None and count >= limit:
                         break
             
             proc.stdin.close()
@@ -366,23 +393,23 @@ def import_cnefe_to_postgres(
         DELETE FROM cnefe_enderecos WHERE uf = '{uf_upper}';
         INSERT INTO cnefe_enderecos (
             cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro,
-            numero, modificador, bairro, cep, latitude, longitude
+            numero, modificador, bairro, cep, latitude, longitude, geom
         )
         SELECT
             cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro,
-            numero, modificador, bairro, cep, latitude, longitude
+            numero, modificador, bairro, cep, latitude, longitude,
+            CASE
+                WHEN latitude IS NOT NULL AND longitude IS NOT NULL
+                THEN ST_SetSRID(ST_Point(longitude, latitude), 4326)
+            END
         FROM {stage_table};
         DROP TABLE IF EXISTS {stage_table};
         COMMIT;
         """
         subprocess.run(psql_base_cmd() + ["-c", atomic_swap_sql], check=True)
 
-        print("Atualizando geometrias espaciais PostGIS e criando índices...")
+        print("Criando índices espaciais PostGIS...")
         post_import_sql = f"""
-        UPDATE cnefe_enderecos 
-        SET geom = ST_SetSRID(ST_Point(longitude, latitude), 4326) 
-        WHERE uf = '{uf_upper}' AND geom IS NULL AND latitude IS NOT NULL AND longitude IS NOT NULL;
-        
         CREATE INDEX IF NOT EXISTS idx_cnefe_lookup ON cnefe_enderecos (uf, municipio, logradouro, numero);
         CREATE INDEX IF NOT EXISTS idx_cnefe_cep ON cnefe_enderecos (cep);
         CREATE INDEX IF NOT EXISTS idx_cnefe_geom ON cnefe_enderecos USING GIST (geom);
@@ -395,6 +422,14 @@ def import_cnefe_to_postgres(
     finally:
         cleanup_sql = f"DROP TABLE IF EXISTS {stage_table};"
         subprocess.run(psql_base_cmd() + ["-c", cleanup_sql], capture_output=True)
+
+def positive_int(value: str) -> int:
+    """argparse converter for a positive row limit."""
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("deve ser um número inteiro positivo")
+    return parsed
+
 
 def main() -> None:
     """Main CLI entrypoint for CNEFE address importer."""
@@ -426,7 +461,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--limit",
-        type=int,
+        type=positive_int,
         default=None,
         help="Limite de linhas para teste por UF."
     )
@@ -439,7 +474,7 @@ def main() -> None:
     print("🗺️  Importador IBGE CNEFE 2022 -> PostgreSQL/PostGIS")
     print(f"📌  UFs selecionadas ({len(target_ufs)}): {', '.join(target_ufs)}")
     print(f"📂  Pasta de download: {args.dest}")
-    if args.limit:
+    if args.limit is not None:
         print(f"⚠️  Limite de teste: {args.limit:,} linhas por UF")
     print("=================================================================\n")
 
