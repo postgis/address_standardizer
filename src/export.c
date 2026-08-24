@@ -29,7 +29,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #define ORDER_DISPLACEMENT 2
 
 /* -- local prototypes -- */
-static void _copy_standard_( STAND_PARAM * , SYMB , int , int  ) ;
+static void _copy_standard_( STAND_PARAM * , SYMB , int , int , int  ) ;
 static void _scan_target_( STAND_PARAM * , SYMB , int  ) ;
 static void _scan_unit_target_( STAND_PARAM * , int  ) ;
 static char *_get_standard_( STAND_PARAM * , int , int ) ;
@@ -382,7 +382,7 @@ static void _scan_target_(STAND_PARAM *__stand_param__,SYMB sym , int dest)
 	{
 		if (__output_syms__[i] == sym)
 		{
-			_copy_standard_(__stand_param__,sym,dest,i) ;
+			_copy_standard_(__stand_param__,sym,dest,i,0) ;
 		}
 	}
 }
@@ -395,17 +395,29 @@ static void _scan_unit_target_(STAND_PARAM *__stand_param__, int dest)
 {
 	int i ;
 	int n = __stand_param__->LexNum ;
+	int has_unit_header = 0 ;
 	SYMB *__output_syms__ = __stand_param__->best_output ;
 
 	/* Unit headers and identifiers share one field.  Scan both symbols in
-	 * lexical order so repeated pairs stay associated in the output. */
+	 * lexical order so repeated pairs stay associated in the output.  Detect
+	 * headers first because an identifier can precede its header, as in
+	 * "REAR APARTMENT 2". */
+	for (i = FIRST_LEX_POS; i < n; i++)
+	{
+		if (__output_syms__[i] == UNITH)
+		{
+			has_unit_header = 1 ;
+			break ;
+		}
+	}
+
 	for (i = FIRST_LEX_POS; i < n; i++)
 	{
 		SYMB sym = __output_syms__[i] ;
 
 		if ((sym == UNITH) || (sym == UNITT))
 		{
-			_copy_standard_(__stand_param__,sym,dest,i) ;
+			_copy_standard_(__stand_param__,sym,dest,i,has_unit_header) ;
 		}
 	}
 }
@@ -417,7 +429,7 @@ export.c (_copy_standard_)
 strlen, strcpy
 uses macro SPACE_APPEND_WITH_LEN
 -------------------------------------------*/
-static void _copy_standard_( STAND_PARAM *__stand_param__ , SYMB output_sym , int fld , int lex_pos )
+static void _copy_standard_( STAND_PARAM *__stand_param__ , SYMB output_sym , int fld , int lex_pos , int has_unit_header )
 {
 
 	/*-- Retrieve the standardized string --*/
@@ -432,7 +444,7 @@ static void _copy_standard_( STAND_PARAM *__stand_param__ , SYMB output_sym , in
 	{
 		SPACE_APPEND_WITH_LEN( __dest_buf__ , __stan_str__ , MAXFLDLEN ) ;
 	}
-	else if ( output_sym == UNITT )
+	else if (( output_sym == UNITT ) && !has_unit_header)
 	{
 		/*-- If the unit id type is missing, one needs to be provided.
          This might result in a mismatch, when the type is implicit
