@@ -434,12 +434,15 @@ def import_cnefe_to_postgres(
 
         print("Criando índices espaciais PostGIS...")
         post_import_sql = f"""
+        BEGIN;
+        SELECT pg_advisory_xact_lock(hashtext('address_standardizer:cnefe_schema'));
         CREATE INDEX IF NOT EXISTS idx_cnefe_lookup ON cnefe_enderecos (uf, municipio, logradouro, numero);
         CREATE INDEX IF NOT EXISTS idx_cnefe_cep ON cnefe_enderecos (cep);
         CREATE INDEX IF NOT EXISTS idx_cnefe_geom ON cnefe_enderecos USING GIST (geom);
         CREATE INDEX IF NOT EXISTS idx_cnefe_geog ON cnefe_enderecos USING GIST ((geom::geography));
         CREATE INDEX IF NOT EXISTS idx_cnefe_logr_trgm ON cnefe_enderecos USING GIN (logradouro gin_trgm_ops);
         ANALYZE cnefe_enderecos;
+        COMMIT;
         """
         subprocess.run(psql_base_cmd() + ["-c", post_import_sql], check=True)
         print(f"✅ Geometrias PostGIS e índices otimizados para {uf_upper} com sucesso!")

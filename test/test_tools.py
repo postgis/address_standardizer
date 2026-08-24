@@ -590,7 +590,10 @@ class TestImportCnefe(unittest.TestCase):
             self.assertIn("COMMIT", swap_sql)
             self.assertFalse(any("UPDATE cnefe_enderecos" in sql for sql in sql_commands))
             post_import_sql = next(sql for sql in sql_commands if "idx_cnefe_lookup" in sql)
+            self.assertLess(post_import_sql.index("BEGIN;"), post_import_sql.index("pg_advisory_xact_lock"))
+            self.assertLess(post_import_sql.index("address_standardizer:cnefe_schema"), post_import_sql.index("CREATE INDEX"))
             self.assertLess(post_import_sql.index("idx_cnefe_logr_trgm"), post_import_sql.index("ANALYZE cnefe_enderecos"))
+            self.assertLess(post_import_sql.index("ANALYZE cnefe_enderecos"), post_import_sql.index("COMMIT;"))
         finally:
             if os.path.exists(zip_path):
                 os.remove(zip_path)
