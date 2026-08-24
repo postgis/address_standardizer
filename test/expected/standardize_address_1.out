@@ -92,6 +92,13 @@ SELECT '#unit_order' AS ticket, house_num, name, suftype, unit FROM standardize_
  #unit_order | 123       | MAIN | STREET  | REAR APARTMENT 2
 (1 row)
 
+SELECT '#ca_postal' AS ticket, postcode FROM standardize_address(
+    'us_lex', 'us_gaz', 'us_rules', '123 King St', 'Toronto, ON M5V 2T6');
+   ticket   | postcode 
+------------+----------
+ #ca_postal | M5V 2T6
+(1 row)
+
 RESET statement_timeout;
 DO $$
 BEGIN

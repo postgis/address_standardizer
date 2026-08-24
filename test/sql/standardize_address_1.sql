@@ -17,6 +17,8 @@ SELECT '#hash_unit_attached' AS ticket, house_num, name, suftype, unit FROM stan
     'us_lex', 'us_gaz', 'us_rules', '123 Main St#4', 'Boston, MA');
 SELECT '#unit_order' AS ticket, house_num, name, suftype, unit FROM standardize_address(
     'us_lex', 'us_gaz', 'us_rules', '123 Main St Rear Apt 2', 'Boston, MA');
+SELECT '#ca_postal' AS ticket, postcode FROM standardize_address(
+    'us_lex', 'us_gaz', 'us_rules', '123 King St', 'Toronto, ON M5V 2T6');
 RESET statement_timeout;
 DO $$
 BEGIN
