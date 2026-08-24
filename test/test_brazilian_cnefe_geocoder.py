@@ -33,6 +33,7 @@ class TestBrazilianCnefeGeocoder(unittest.TestCase):
 
     def test_remove_accents(self):
         self.assertEqual(import_brazilian_cnefe.remove_accents("Belém"), "BELEM")
+        self.assertEqual(import_brazilian_cnefe.remove_accents("Açucena"), "ACUCENA")
         self.assertEqual(import_brazilian_cnefe.remove_accents("São João d'Aliança"), "SAO JOAO D'ALIANCA")
         self.assertEqual(import_brazilian_cnefe.remove_accents(""), "")
 
@@ -450,8 +451,10 @@ class TestBrazilianCnefeGeocoder(unittest.TestCase):
 
         # Both exact and fuzzy geocoding must disambiguate streets that share a name and number.
         self.assertEqual(docs_content.count("AND c.tipo = p.pretype"), 2)
-        self.assertEqual(docs_content.count("c.street_name = p.name"), 1)
-        self.assertEqual(docs_content.count("c.street_name % p.name"), 1)
+        self.assertEqual(docs_content.count("upper(unaccent('unaccent', p.name)) AS street_key"), 2)
+        self.assertEqual(docs_content.count("c.street_name = p.street_key"), 1)
+        self.assertEqual(docs_content.count("c.street_name % p.street_key"), 1)
+        self.assertEqual(docs_content.count("similarity(c.street_name, p.street_key)"), 1)
         self.assertEqual(docs_content.count("c.house_number = p.house_num"), 2)
         self.assertIn("CONCAT_WS(' ', c.tipo, c.street_name)", docs_content)
         self.assertIn(
@@ -525,6 +528,7 @@ class TestBrazilianCnefeGeocoder(unittest.TestCase):
         self.assertIn("address_standardizer.so", dockerfile_content)
         self.assertIn("\\set ON_ERROR_STOP on", init_content)
         self.assertIn("CREATE EXTENSION IF NOT EXISTS pg_trgm;", init_content)
+        self.assertIn("CREATE EXTENSION IF NOT EXISTS unaccent;", init_content)
         self.assertIn("CREATE EXTENSION IF NOT EXISTS address_standardizer;", init_content)
         self.assertIn("CREATE EXTENSION IF NOT EXISTS address_standardizer_data_br;", init_content)
 

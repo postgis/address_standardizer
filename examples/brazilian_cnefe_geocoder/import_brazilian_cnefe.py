@@ -218,6 +218,7 @@ def ensure_tables_exist() -> None:
 
     CREATE EXTENSION IF NOT EXISTS postgis;
     CREATE EXTENSION IF NOT EXISTS pg_trgm;
+    CREATE EXTENSION IF NOT EXISTS unaccent;
 
     CREATE TABLE IF NOT EXISTS cnefe_enderecos (
         id bigserial PRIMARY KEY,

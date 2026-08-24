@@ -108,11 +108,13 @@ CREATE TABLE IF NOT EXISTS cnefe_enderecos (
 
 `logradouro` stores `NOM_SEGLOGR`, while `titulo` stores
 `NOM_TITULO_SEGLOGR`. The generated `street_name` combines both fields in the
-same form returned by the Brazilian standardizer. Likewise, `house_number`
-combines `NUM_ENDERECO` and `DSC_MODIFICADOR`, so a CNEFE row such as `100` +
-`A` matches standardized `100 A`. Apartment, unit, and other complement fields
-are not stored or distinguished; matching stops at the building and
-house-number level.
+ASCII-uppercase form used by the importer. The queries below normalize the
+standardizer's street name to that same key with `upper(unaccent(...))`, so
+accented and unaccented input match the same CNEFE row. Likewise,
+`house_number` combines `NUM_ENDERECO` and `DSC_MODIFICADOR`, so a CNEFE row
+such as `100` + `A` matches standardized `100 A`. Apartment, unit, and other
+complement fields are not stored or distinguished; matching stops at the
+building and house-number level.
 
 ## Exact geocoding
 
@@ -120,16 +122,19 @@ house-number level.
 WITH parsed AS (
     SELECT * FROM standardize_address(
         'br_lex', 'br_gaz', 'br_rules',
-        'Rua Augusta, 100',
+        'Rua Açucena, 100',
         'Sao Paulo, SP'
     )
+), normalized AS (
+    SELECT p.*, upper(unaccent('unaccent', p.name)) AS street_key
+    FROM parsed AS p
 )
 SELECT c.*
-FROM cnefe_enderecos AS c, parsed AS p
+FROM cnefe_enderecos AS c, normalized AS p
 WHERE c.uf = p.state
   AND c.municipio = p.city
   AND c.tipo = p.pretype
-  AND c.street_name = p.name
+  AND c.street_name = p.street_key
   AND c.house_number = p.house_num
 LIMIT 1;
 ```
@@ -146,14 +151,17 @@ WITH parsed AS (
         'Rua Agusta, 100',
         'Sao Paulo, SP'
     )
+), normalized AS (
+    SELECT p.*, upper(unaccent('unaccent', p.name)) AS street_key
+    FROM parsed AS p
 )
-SELECT c.*, similarity(c.street_name, p.name) AS similarity_score
-FROM cnefe_enderecos AS c, parsed AS p
+SELECT c.*, similarity(c.street_name, p.street_key) AS similarity_score
+FROM cnefe_enderecos AS c, normalized AS p
 WHERE c.uf = p.state
   AND c.municipio = p.city
   AND c.tipo = p.pretype
   AND c.house_number = p.house_num
-  AND c.street_name % p.name
+  AND c.street_name % p.street_key
 ORDER BY similarity_score DESC
 LIMIT 5;
 ```
