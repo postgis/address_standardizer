@@ -248,6 +248,9 @@ UNIT_WORDS = [
     ("NUM", "", 19),
     ("Nº", "", 19),
     ("N.", "", 19),
+    # The scanner discards the period, so retain the bare alias for the
+    # dotted house-number header without redefining the real N direction.
+    ("N", "", 19),
     ("NO", "", 19),
     ("S/N", "S/N", 0),
     ("SN", "S/N", 0),

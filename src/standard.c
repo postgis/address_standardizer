@@ -123,6 +123,22 @@ static int _Is_Alphabetic_Character_(const char *character)
 #endif
 }
 
+/* Treat the Unicode right single quotation mark like the ASCII apostrophe
+ * used by the lexicon (for example, Dias d’Ávila). */
+static int _Is_Apostrophe_(const char *character)
+{
+	if ((unsigned char) character[0] == '\'' )
+		return TRUE ;
+#ifndef PAGC_STANDALONE
+	return GetDatabaseEncoding() == PG_UTF8 &&
+	       (unsigned char) character[0] == 0xE2 &&
+	       (unsigned char) character[1] == 0x80 &&
+	       (unsigned char) character[2] == 0x99 ;
+#else
+	return FALSE ;
+#endif
+}
+
 static int _Is_Combining_Mark_(const char *character)
 {
 	unsigned char first_byte = (unsigned char) *character ;
@@ -420,21 +436,28 @@ static char * _Scan_Next_( STAND_PARAM *__stand_param__,char * __in_ptr__)
 		TERM_AND_LENGTH ;
 		RETURN_NEW_MORPH(DSINGLE) ;
 	}
-	if (_Is_Alphabetic_Character_(__src__) || (a == '\''))
+	if (_Is_Alphabetic_Character_(__src__) || _Is_Apostrophe_(__src__))
 	{
 		int character_count = 0 ;
 
 		while (_Is_Alphabetic_Character_(__src__) ||
 		       _Is_Combining_Mark_(__src__) ||
-		       (*__src__ == '\''))
+		       _Is_Apostrophe_(__src__))
 		{
+			int is_apostrophe = _Is_Apostrophe_(__src__) ;
 			int is_combining_mark = _Is_Combining_Mark_(__src__) ;
-			int character_length = (*__src__ == '\'') ? 1 :
+			int character_length = is_apostrophe ?
+			                       ((unsigned char) *__src__ == '\'' ? 1 : 3) :
 			                       _Character_Length_(__src__) ;
 
 			ENSURE_SCAN_ROOM(character_length) ;
-			memcpy(__dest__, __src__, character_length) ;
-			__dest__ += character_length ;
+			if (is_apostrophe)
+				*__dest__++ = '\'' ;
+			else
+			{
+				memcpy(__dest__, __src__, character_length) ;
+				__dest__ += character_length ;
+			}
 			__src__ += character_length ;
 			if (!is_combining_mark)
 			{

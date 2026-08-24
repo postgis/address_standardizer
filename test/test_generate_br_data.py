@@ -235,6 +235,7 @@ class TestGenerateBrData(unittest.TestCase):
         self.assertIn("'CASA', 'CASA', 19", content)
         self.assertIn("'BR', 'BR', 1", content)
         self.assertIn("'BR', 'BR', 6", content)
+        self.assertIn("'N', '', 19", content)
 
     def test_numeric_street_prefixes_are_context_specific_phrases(self):
         """Reviewed date-name prefixes become words without changing bare numbers."""

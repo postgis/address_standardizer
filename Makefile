@@ -97,7 +97,7 @@ data/$(DATA_EXTENSION_BR)--ANY--$(AS_VERSION).sql: data/$(DATA_EXTENSION_BR)_cor
 	cat $^ > $@
 
 
-.PHONY: dist check installcheck test-rules-api test-br-data-generator
+.PHONY: dist check installcheck installcheck-latin1 test-rules-api test-br-data-generator
 dist:
 	git archive --prefix=$(DISTNAME)/ HEAD | gzip > $(DISTARCHIVE)
 
@@ -124,6 +124,9 @@ test/rules_api_test: test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(PG_CPPFLAGS) -DPAGC_STANDALONE -ffunction-sections -Isrc -I$(shell $(PG_CONFIG) --includedir-server) -o $@ test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_tools.c src/standard.c src/tokenize.c src/lexicon.c src/hash.c src/analyze.c src/export.c -Wl,--gc-sections -L$(shell $(PG_CONFIG) --pkglibdir) -lpgcommon -lpgport $(RULES_API_TEST_LIBS)
 
 installcheck: test-rules-api test-br-data-generator
+
+installcheck-latin1:
+	sh tools/run-latin1-check.sh
 
 check: test-rules-api test-br-data-generator
 	PG_CONFIG="$(PG_CONFIG)" MAKE="$(MAKE)" sh tools/run-check.sh
