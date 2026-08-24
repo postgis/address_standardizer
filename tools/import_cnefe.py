@@ -216,6 +216,9 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
 def ensure_tables_exist() -> None:
     """Ensures that the cnefe_enderecos table, staging table, and required extensions exist in PostgreSQL."""
     sql = """
+    BEGIN;
+    SELECT pg_advisory_xact_lock(hashtext('address_standardizer:cnefe_schema'));
+
     CREATE EXTENSION IF NOT EXISTS postgis;
     CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
@@ -250,6 +253,7 @@ def ensure_tables_exist() -> None:
         latitude double precision,
         longitude double precision
     );
+    COMMIT;
     """
     subprocess.run(psql_base_cmd() + ["-c", sql], check=True)
 

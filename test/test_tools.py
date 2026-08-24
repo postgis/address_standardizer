@@ -342,6 +342,22 @@ class TestImportCnefe(unittest.TestCase):
         self.assertNotIn("complemento text", docs_content)
         self.assertNotIn("complemento text", importer_content)
 
+    @patch("subprocess.run")
+    def test_schema_initialization_is_serialized(self, mock_run):
+        """Shared first-run DDL must finish under one database-wide transaction lock."""
+        import_cnefe.ensure_tables_exist()
+
+        mock_run.assert_called_once()
+        command = mock_run.call_args.args[0]
+        sql = command[command.index("-c") + 1]
+        self.assertTrue(mock_run.call_args.kwargs["check"])
+        self.assertLess(sql.index("BEGIN;"), sql.index("pg_advisory_xact_lock"))
+        self.assertLess(sql.index("pg_advisory_xact_lock"), sql.index("CREATE EXTENSION"))
+        self.assertLess(sql.index("pg_advisory_xact_lock"), sql.index("CREATE TABLE"))
+        self.assertLess(sql.index("CREATE TABLE"), sql.index("COMMIT;"))
+        self.assertIn("address_standardizer:cnefe_schema", sql)
+        self.assertNotIn("cnefe_enderecos:SP", sql)
+
     def test_reverse_geocoding_geography_knn(self):
         """Verify that reverse geocoding index and query use geography KNN and ST_DWithin for metric search."""
         docs_path = os.path.join(REPO_ROOT, "docs", "geocodificador_cnefe_brasil.md")
@@ -530,6 +546,8 @@ class TestImportCnefe(unittest.TestCase):
             self.assertIn("latitude, longitude, geom", swap_sql)
             self.assertIn("ST_SetSRID(ST_Point(longitude, latitude), 4326)", swap_sql)
             self.assertIn("pg_advisory_xact_lock", swap_sql)
+            self.assertIn("cnefe_enderecos:SP", swap_sql)
+            self.assertNotIn("address_standardizer:cnefe_schema", swap_sql)
             self.assertIn("Substituição parcial com --limit foi rejeitada", swap_sql)
             self.assertLess(swap_sql.index("pg_advisory_xact_lock"), swap_sql.index("DO $$"))
             self.assertLess(swap_sql.index("DO $$"), swap_sql.index("DELETE FROM cnefe_enderecos"))
