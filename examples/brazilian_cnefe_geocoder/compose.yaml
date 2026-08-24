@@ -1,21 +1,23 @@
+name: address-standardizer-brazilian-cnefe
+
 services:
-  postgis:
-    image: postgis/postgis:15-3.3
-    container_name: postgis_br
+  database:
+    build:
+      context: ../..
+      dockerfile: examples/brazilian_cnefe_geocoder/Dockerfile
+      args:
+        POSTGRES_MAJOR: 15
+        POSTGIS_VERSION: "3.5"
+    container_name: address_standardizer_brazilian_cnefe
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-address_db}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Please set POSTGRES_PASSWORD in .env}
     ports:
-
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
-
     volumes:
-      # Armazenamento configuravel via POSTGRES_DATA_DIR (.env) ou fallback para ./.pgdata
       - ${POSTGRES_DATA_DIR:-./.pgdata}:/var/lib/postgresql/data
-      # Scripts SQL do repositorio
-      - ./sql:/sql:ro
-      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./initdb/10_extensions.sql:/docker-entrypoint-initdb.d/10_extensions.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-address_db}"]
       interval: 5s

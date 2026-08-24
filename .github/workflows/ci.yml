@@ -38,8 +38,8 @@ jobs:
         export PG_CFLAGS=-Werror
         make && make install
 
-    - name: 'Test CNEFE tooling'
-      run: python3 test/test_tools.py -q
+    - name: 'Test Brazilian CNEFE geocoder example'
+      run: python3 test/test_brazilian_cnefe_geocoder.py -q
 
     - name: 'Test'
       run: PGUSER=postgres make installcheck installcheck-latin1 || (cat test/regression.diffs 2>/dev/null || cat regression.diffs 2>/dev/null; false)

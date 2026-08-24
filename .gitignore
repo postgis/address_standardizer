@@ -15,6 +15,7 @@ test/results/*.diff
 .env
 .env.*
 !.env.example
-.pgdata/
-downloads_cnefe/
+examples/brazilian_cnefe_geocoder/.pgdata/
+examples/brazilian_cnefe_geocoder/downloads_cnefe/
 *.zip
+__pycache__/

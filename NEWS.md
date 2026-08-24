@@ -8,8 +8,8 @@
 
 - GH-11, Add `address_standardizer_data_br` with Brazilian lexicon,
   gazetteer, and address rules (Ruy França, Darafei Praliaskouski)
-- GH-12, Add a Docker Compose environment and CNEFE importer for offline
-  Brazilian geocoding (Ruy França, Darafei Praliaskouski)
+- GH-12, Add an optional example for combining the Brazilian standardizer data
+  with the IBGE CNEFE address register (Ruy França, Darafei Praliaskouski)
 
 ### Bug Fixes
 

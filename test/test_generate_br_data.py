@@ -86,7 +86,6 @@ class TestGenerateBrData(unittest.TestCase):
         self.assertIn("Open Database License (ODbL)", readme_content)
         self.assertIn("https://opendatacommons.org/licenses/odbl/", readme_content)
         self.assertIn("Public API for Localidades", readme_content)
-        self.assertNotIn("CNEFE", readme_content)
         self.assertNotIn("5,571", readme_content)
 
         with tempfile.NamedTemporaryFile(mode="w+", suffix=".sql", delete=False) as tf:

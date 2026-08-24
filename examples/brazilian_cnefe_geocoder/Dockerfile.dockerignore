@@ -1,0 +1,10 @@
+.git
+.env
+.pgdata
+downloads_cnefe
+*.o
+*.so
+*.bc
+*.zip
+data/*.sql
+test/results

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-IBGE CNEFE 2022 Address & Geocode Importer for PostgreSQL/PostGIS.
+Brazilian IBGE CNEFE 2022 address reference importer for PostgreSQL/PostGIS.
 
-Downloads official CNEFE (Censo Demográfico 2022) open datasets from IBGE,
-processes addresses and GPS coordinates, and loads them directly into PostGIS.
+CNEFE is Brazil's National Address Register for Statistical Purposes. This
+example downloads official 2022 Census archives from IBGE, normalizes their
+address and coordinate fields, and loads a searchable PostGIS reference table.
 """
 
 import argparse
@@ -48,8 +49,8 @@ def generate_uuid7() -> str:
 
 
 def load_env() -> None:
-    """Loads environment variables from .env in the repository root if present."""
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    """Loads environment variables from this example's .env file if present."""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
     if os.path.exists(env_path):
         with open(env_path, "r", encoding="utf-8") as f:
             for line in f:
@@ -88,7 +89,7 @@ def psql_base_cmd() -> list:
         if password and not os.environ.get("PGPASSWORD"):
             os.environ["PGPASSWORD"] = password
         return ["psql", "-h", host, "-p", port, "-U", user, "-d", db, "-w"]
-    container = os.getenv("POSTGRES_CONTAINER", "postgis_br")
+    container = os.getenv("POSTGRES_CONTAINER", "address_standardizer_brazilian_cnefe")
     return ["docker", "exec", "-i", container, "psql", "-U", user, "-d", db]
 
 def get_target_ufs(uf_arg: str, all_flag: bool = False) -> list[str]:
@@ -98,18 +99,18 @@ def get_target_ufs(uf_arg: str, all_flag: bool = False) -> list[str]:
 
     ufs = [u.strip().upper() for u in uf_arg.split(",") if u.strip()]
     if not ufs:
-        raise ValueError("Nenhuma UF informada. Forneça uma sigla (ex: SP, PA), uma lista (ex: SP,RJ) ou 'BR' para todos os estados.")
+        raise ValueError("No UF supplied. Use a state code, a comma-separated list, or 'BR' for all states.")
 
     for u in ufs:
         if u not in UF_CODE_MAP:
-            raise ValueError(f"UF inválida: '{u}'. Use uma sigla válida (ex: SP, RJ, MG) ou 'BR' / --all para o Brasil inteiro.")
+            raise ValueError(f"Invalid UF: '{u}'. Use a Brazilian state code or 'BR' / --all for the whole country.")
     return ufs
 
 def get_municipality_map() -> dict:
     """Fetches official IBGE code -> (Municipality Name, UF) mapping from IBGE API."""
     url = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-    print("Obtendo lista oficial de municípios do IBGE...")
+    print("Fetching the official IBGE municipality list...")
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             raw = resp.read()
@@ -126,10 +127,10 @@ def get_municipality_map() -> dict:
                 elif item.get("regiao-imediata"):
                     uf = item["regiao-imediata"]["regiao-intermediaria"]["UF"]["sigla"]
                 muni_map[muni_id] = (name, uf)
-            print(f"✅ {len(muni_map):,} municípios mapeados com sucesso.")
+            print(f"Mapped {len(muni_map):,} municipalities.")
             return muni_map
     except Exception as e:
-        raise RuntimeError(f"Não foi possível obter o mapeamento de municípios do IBGE: {e}") from e
+        raise RuntimeError(f"Could not fetch the IBGE municipality mapping: {e}") from e
 
 
 def validate_cnefe_zip(zip_path: str, deep: bool = True) -> bool:
@@ -154,8 +155,8 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
     code = UF_CODE_MAP.get(uf_upper)
     if not code:
         if uf_upper in ("BR", "ALL", "BRASIL"):
-            raise ValueError(f"O IBGE divide o CNEFE por estados. Use o importador com '--uf BR' ou '--all' para iterar por todas as 27 UFs.")
-        raise ValueError(f"UF inválida: {uf}")
+            raise ValueError("IBGE publishes CNEFE by state. Use '--uf BR' or '--all' to process all 27 UFs.")
+        raise ValueError(f"Invalid UF: {uf}")
 
     filename = f"{code}_{uf_upper}.zip"
     dest_path = os.path.join(dest_dir, filename)
@@ -165,17 +166,17 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
         cached_size = 0
     if cached_size > 1000000:
         if validate_cnefe_zip(dest_path, deep=False):
-            print(f"Arquivo já existe em cache: {dest_path} ({cached_size/(1024*1024):.2f} MB)")
+            print(f"Using cached archive: {dest_path} ({cached_size/(1024*1024):.2f} MB)")
             return dest_path
-        print(f"Arquivo em cache inválido; baixando novamente: {dest_path}")
+        print(f"Cached archive is invalid; downloading it again: {dest_path}")
         try:
             os.remove(dest_path)
         except FileNotFoundError:
             pass
 
     url = f"https://ftp.ibge.gov.br/Cadastro_Nacional_de_Enderecos_para_Fins_Estatisticos/Censo_Demografico_2022/Arquivos_CNEFE/CSV/UF/{filename}"
-    print(f"Baixando CNEFE oficial do IBGE para {uf_upper}: {url}")
-    print(f"Destino local: {dest_path}")
+    print(f"Downloading official Brazilian CNEFE data for {uf_upper}: {url}")
+    print(f"Local destination: {dest_path}")
 
     start_time = time.time()
     req = urllib.request.Request(url, headers={'User-Agent': 'PostGIS-CNEFE-Importer/1.0'})
@@ -197,17 +198,17 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
                     percent = (downloaded / total_size) * 100
                     mb_down = downloaded / (1024 * 1024)
                     mb_total = total_size / (1024 * 1024)
-                    print(f"\rProgresso do Download: {percent:.1f}% ({mb_down:.1f}/{mb_total:.1f} MB)", end="", flush=True)
+                    print(f"\rDownload progress: {percent:.1f}% ({mb_down:.1f}/{mb_total:.1f} MB)", end="", flush=True)
 
         if total_size > 0 and downloaded != total_size:
-            raise IOError(f"Download truncado para {uf_upper}: recebidos {downloaded} bytes de {total_size} bytes esperados.")
+            raise IOError(f"Truncated download for {uf_upper}: received {downloaded} of {total_size} expected bytes.")
 
         if not validate_cnefe_zip(tmp_path):
-            raise IOError(f"Download inválido ou corrompido para {uf_upper}; arquivo ZIP não foi salvo em cache.")
+            raise IOError(f"Invalid or corrupt download for {uf_upper}; the ZIP was not promoted to the cache.")
 
         os.replace(tmp_path, dest_path)
         elapsed = time.time() - start_time
-        print(f"\n✅ Download concluído em {elapsed:.1f}s ({os.path.getsize(dest_path)/(1024*1024):.2f} MB).")
+        print(f"\nDownload completed in {elapsed:.1f}s ({os.path.getsize(dest_path)/(1024*1024):.2f} MB).")
         return dest_path
     finally:
         if os.path.exists(tmp_path):
@@ -258,9 +259,9 @@ def import_cnefe_to_postgres(
     """Streams CSV data from zip file into PostgreSQL via staging table with COPY and builds spatial indexes."""
     uf_upper = uf.upper()
     if uf_upper not in UF_CODE_MAP:
-        raise ValueError(f"UF inválida: {uf}")
+        raise ValueError(f"Invalid UF: {uf}")
     if limit is not None and limit <= 0:
-        raise ValueError("--limit deve ser um número inteiro positivo.")
+        raise ValueError("--limit must be a positive integer.")
 
     ensure_tables_exist()
 
@@ -271,16 +272,16 @@ def import_cnefe_to_postgres(
         existing_count = int(res.stdout.strip() or 0)
         if existing_count > 0:
             raise ValueError(
-                f"A UF '{uf_upper}' já possui {existing_count:,} registros no banco. "
-                "Substituição parcial com --limit foi rejeitada para evitar perda de dados existentes. "
-                "Execute sem --limit para atualizar o estado completo."
+                f"UF '{uf_upper}' already has {existing_count:,} database rows. "
+                "A partial --limit replacement was rejected to preserve existing data. "
+                "Run without --limit to replace the complete state."
             )
 
     if muni_map is None:
         muni_map = get_municipality_map()
 
     stage_table = stage_table_name(uf_upper)
-    print(f"Preparando importação para UF: {uf_upper} (tabela temporária: {stage_table})...")
+    print(f"Preparing UF {uf_upper} with staging table {stage_table}...")
     create_stage_sql = f"""
     CREATE UNLOGGED TABLE IF NOT EXISTS {stage_table} (
         cod_municipio_ibge integer NOT NULL,
@@ -301,12 +302,12 @@ def import_cnefe_to_postgres(
     subprocess.run(psql_base_cmd() + ["-c", create_stage_sql], check=True)
 
     try:
-        print(f"Lendo e transmitindo dados de {zip_path}...")
+        print(f"Streaming data from {zip_path}...")
         with zipfile.ZipFile(zip_path, 'r') as z:
             csv_filename = find_csv_filename(z.namelist())
             if not csv_filename:
-                raise FileNotFoundError(f"Nenhum arquivo CSV encontrado dentro do arquivo ZIP: {zip_path}")
-            print(f"Arquivo CSV interno: {csv_filename}")
+                raise FileNotFoundError(f"No CSV member found in ZIP archive: {zip_path}")
+            print(f"CSV member: {csv_filename}")
 
             copy_sql = (
                 f"COPY {stage_table} (cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro, "
@@ -371,7 +372,7 @@ def import_cnefe_to_postgres(
                         if count % 100000 == 0:
                             elapsed = time.time() - start_time
                             speed = count / elapsed if elapsed > 0 else 0
-                            print(f"\rProcessando e inserindo: {count:,} linhas ({speed:.0f} linhas/s)...", end="", flush=True)
+                            print(f"\rStreaming {count:,} rows ({speed:.0f} rows/s)...", end="", flush=True)
 
                         if limit is not None and count >= limit:
                             break
@@ -392,20 +393,22 @@ def import_cnefe_to_postgres(
                 raise
 
             elapsed = time.time() - start_time
-            print(f"\n✅ Total inserido em staging ({stage_table}): {count:,} registros em {elapsed:.1f}s.")
+            print(f"\nLoaded {count:,} rows into {stage_table} in {elapsed:.1f}s.")
 
         if count == 0:
-            print(f"⚠️ Nenhum registro válido encontrado em {zip_path} para a UF {uf_upper}. Importação abortada e dados existentes preservados.")
-            return 0
+            raise RuntimeError(
+                f"No valid rows were found in {zip_path} for UF {uf_upper}; "
+                "existing rows were preserved."
+            )
 
-        print(f"\nAplicando transação atômica para substituir dados da UF: {uf_upper}...")
+        print(f"\nAtomically replacing data for UF {uf_upper}...")
         partial_limit_guard_sql = ""
         if limit is not None:
             partial_limit_guard_sql = f"""
             DO $$
             BEGIN
                 IF EXISTS (SELECT 1 FROM cnefe_enderecos WHERE uf = '{uf_upper}') THEN
-                    RAISE EXCEPTION 'Substituição parcial com --limit foi rejeitada para a UF {uf_upper}';
+                    RAISE EXCEPTION 'Partial --limit replacement rejected for UF {uf_upper}';
                 END IF;
             END
             $$;
@@ -432,7 +435,7 @@ def import_cnefe_to_postgres(
         """
         subprocess.run(psql_base_cmd() + ["-c", atomic_swap_sql], check=True)
 
-        print("Criando índices espaciais PostGIS...")
+        print("Creating PostGIS indexes...")
         post_import_sql = f"""
         BEGIN;
         SELECT pg_advisory_xact_lock(hashtext('address_standardizer:cnefe_schema'));
@@ -445,7 +448,7 @@ def import_cnefe_to_postgres(
         COMMIT;
         """
         subprocess.run(psql_base_cmd() + ["-c", post_import_sql], check=True)
-        print(f"✅ Geometrias PostGIS e índices otimizados para {uf_upper} com sucesso!")
+        print(f"PostGIS geometries and indexes are ready for {uf_upper}.")
         return count
     finally:
         cleanup_sql = f"DROP TABLE IF EXISTS {stage_table};"
@@ -455,7 +458,7 @@ def positive_int(value: str) -> int:
     """argparse converter for a positive row limit."""
     parsed = int(value)
     if parsed <= 0:
-        raise argparse.ArgumentTypeError("deve ser um número inteiro positivo")
+        raise argparse.ArgumentTypeError("must be a positive integer")
     return parsed
 
 
@@ -469,29 +472,31 @@ def main() -> None:
         else:
             default_dest = "./downloads_cnefe"
 
-    parser = argparse.ArgumentParser(description="Import CNEFE 2022 address and geocode datasets into PostGIS.")
+    parser = argparse.ArgumentParser(
+        description="Import Brazil's 2022 IBGE CNEFE address reference data into PostGIS."
+    )
     parser.add_argument(
         "--uf",
         type=str,
         default="PA",
-        help="Sigla da UF (ex: PA, SP, RJ), lista separada por vírgula (ex: SP,RJ,MG) ou 'BR' para o Brasil completo."
+        help="Brazilian UF code, comma-separated UF list, or 'BR' for all states."
     )
     parser.add_argument(
         "--all",
         action="store_true",
-        help="Importa todos os 27 estados do Brasil sequencialmente."
+        help="Import all 27 Brazilian federative units sequentially."
     )
     parser.add_argument(
         "--dest",
         type=str,
         default=default_dest,
-        help="Diretório de download para os arquivos ZIP do IBGE."
+        help="Directory used to cache downloaded IBGE ZIP archives."
     )
     parser.add_argument(
         "--limit",
         type=positive_int,
         default=None,
-        help="Limite de linhas para teste por UF."
+        help="Positive development row limit per UF."
     )
     args = parser.parse_args()
 
@@ -499,11 +504,11 @@ def main() -> None:
     target_ufs = get_target_ufs(args.uf, args.all)
 
     print("\n=================================================================")
-    print("🗺️  Importador IBGE CNEFE 2022 -> PostgreSQL/PostGIS")
-    print(f"📌  UFs selecionadas ({len(target_ufs)}): {', '.join(target_ufs)}")
-    print(f"📂  Pasta de download: {args.dest}")
+    print("Brazilian IBGE CNEFE 2022 -> PostgreSQL/PostGIS")
+    print(f"Selected UFs ({len(target_ufs)}): {', '.join(target_ufs)}")
+    print(f"Download directory: {args.dest}")
     if args.limit is not None:
-        print(f"⚠️  Limite de teste: {args.limit:,} linhas por UF")
+        print(f"Development limit: {args.limit:,} rows per UF")
     print("=================================================================\n")
 
     # Fetch municipality map once for all UFs
@@ -513,27 +518,27 @@ def main() -> None:
     failures = []
 
     for idx, uf in enumerate(target_ufs, start=1):
-        print(f"\n[{idx}/{len(target_ufs)}] >>> Iniciando UF: {uf} <<<")
+        print(f"\n[{idx}/{len(target_ufs)}] >>> Starting UF: {uf} <<<")
         try:
             zip_path = download_cnefe(uf, args.dest)
             count = import_cnefe_to_postgres(zip_path, uf, args.limit, muni_map=muni_map)
             total_imported += count
         except Exception as exc:
-            print(f"❌ Falha na UF {uf}: {exc}", file=sys.stderr)
+            print(f"UF {uf} failed: {exc}", file=sys.stderr)
             failures.append((uf, str(exc)))
 
     total_elapsed = time.time() - total_start
     print("\n=================================================================")
     if failures:
-        print("⚠️  Importação CNEFE concluída com falhas.")
+        print("CNEFE import completed with failures.")
     else:
-        print("🎉 Importação CNEFE Concluída com Sucesso!")
-    print(f"📊 Total de UFs processadas: {len(target_ufs) - len(failures)}")
-    print(f"❌ Total de UFs com falha: {len(failures)}")
+        print("CNEFE import completed successfully.")
+    print(f"UFs processed successfully: {len(target_ufs) - len(failures)}")
+    print(f"UFs failed: {len(failures)}")
     for uf, error in failures:
         print(f"   - {uf}: {error}")
-    print(f"📍 Total de registros inseridos no PostGIS: {total_imported:,}")
-    print(f"⏱️  Tempo total: {total_elapsed:.1f}s ({total_elapsed/60:.1f} min)")
+    print(f"Rows inserted into PostGIS: {total_imported:,}")
+    print(f"Total time: {total_elapsed:.1f}s ({total_elapsed/60:.1f} min)")
     print("=================================================================\n")
 
     if failures:
