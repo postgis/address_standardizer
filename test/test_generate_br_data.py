@@ -213,6 +213,10 @@ class TestGenerateBrData(unittest.TestCase):
         self.assertIn("2 1 0 16 -1 4 5 1 16 -1 1 16", content)
         self.assertIn("11 0 -1 11 13 -1 0 16", content)
         self.assertIn("11 0 0 -1 11 13 13 -1 0 16", content)
+        self.assertIn("2 1 0 19 0 18 19 23 -1 4 5 1 16 17 17 16 17 -1 1 17", content)
+        self.assertIn("2 1 0 19 23 19 0 18 -1 4 5 1 16 17 16 17 17 -1 1 17", content)
+        self.assertIn("6 6 0 -1 4 5 5 -1 1 17", content)
+        self.assertIn("6 1 0 -1 4 5 1 -1 1 16", content)
 
     def test_standalone_unit_words_use_a_distinct_token(self):
         """Identifier-free complements must not make all unit headers standalone."""
@@ -224,6 +228,10 @@ class TestGenerateBrData(unittest.TestCase):
         self.assertIn("'FUNDOS', 'FUNDOS', 16", content)
         self.assertIn("'FRENTE', 'FRENTE', 16", content)
         self.assertIn("'APTO', 'APTO', 19", content)
+        self.assertIn("'CASA', 'CASA', 1", content)
+        self.assertIn("'CASA', 'CASA', 19", content)
+        self.assertIn("'BR', 'BR', 1", content)
+        self.assertIn("'BR', 'BR', 6", content)
 
     def test_numeric_street_prefixes_are_context_specific_phrases(self):
         """Reviewed date-name prefixes become words without changing bare numbers."""

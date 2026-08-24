@@ -442,9 +442,17 @@ static void _copy_standard_( STAND_PARAM *__stand_param__ , SYMB output_sym , in
 	}
 	if ( *__dest_buf__ != SENTINEL )
 	{
-		/* Postal pieces use their canonical separator; all other repeated
-		 * output symbols remain space-delimited. */
+		/* Postal pieces and route identifiers use their canonical separators;
+		 * all other repeated output symbols remain space-delimited. */
 		if ( output_sym == POSTAL )
+		{
+			char_append( "-" , __dest_buf__ , __stan_str__ , MAXFLDLEN ) ;
+		}
+		else if (( output_sym == STREET )
+			&& ( lex_pos > FIRST_LEX_POS )
+			&& ( __stand_param__->best_output[lex_pos - 1] == STREET )
+			&& ( __stand_param__->best_defs[lex_pos - 1] != NULL )
+			&& ( __stand_param__->best_defs[lex_pos - 1]->Type == ROAD ))
 		{
 			char_append( "-" , __dest_buf__ , __stan_str__ , MAXFLDLEN ) ;
 		}

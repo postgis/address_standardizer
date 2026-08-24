@@ -173,5 +173,60 @@ SELECT '#br32' AS ticket, house_num, pretype, name, city FROM standardize_addres
 ticket|house_num|pretype|name|city
 #br32|100|RUA|JOÃO E MARIA|SAO PAULO
 (1 row)
+SELECT '#br33' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100 Bloco 2 A Apto 101B', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|unit
+#br33|100|RUA|AUGUSTA|BLOCO 2 A APTO 101B
+(1 row)
+SELECT '#br34' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100 Bloco B2 Apto 101 A', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|unit
+#br34|100|RUA|AUGUSTA|BLOCO B2 APTO 101 A
+(1 row)
+SELECT '#br35' AS ticket, house_num, pretype, name, ruralroute FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rodovia BR-101 Km 150', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|ruralroute
+#br35|150|RODOVIA|BR-101|KM
+(1 row)
+SELECT '#br36' AS ticket, house_num, pretype, name, ruralroute FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rodovia BR-101', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|ruralroute
+#br36||RODOVIA|BR-101|
+(1 row)
+SELECT '#br37' AS ticket, house_num, pretype, name, ruralroute FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rodovia Anhanguera 100', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|ruralroute
+#br37|100|RODOVIA|ANHANGUERA|
+(1 row)
+SELECT '#br38' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Casa do Ator 100', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|unit
+#br38|100|RUA|CASA DO ATOR|
+(1 row)
+SELECT '#br39' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100 Casa 2', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|unit
+#br39|100|RUA|AUGUSTA|CASA 2
+(1 row)
+SELECT '#br40' AS ticket, house_num, pretype, name, ruralroute FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rodovia BR 101 Km 150', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|ruralroute
+#br40|150|RODOVIA|BR-101|KM
+(1 row)
+SELECT '#br41' AS ticket, house_num, pretype, name, ruralroute FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rodovia BR 101', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|ruralroute
+#br41||RODOVIA|BR-101|
+(1 row)
+SELECT '#br42' AS ticket, house_num, pretype, name, ruralroute FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rodovia SP-330 Km 100', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|ruralroute
+#br42|100|RODOVIA|SP-330|KM
+(1 row)
+SELECT '#br43' AS ticket, house_num, pretype, name, ruralroute FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rodovia SP 330', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|ruralroute
+#br43||RODOVIA|SP-330|
+(1 row)
 \pset format aligned
 -- End Brazilian address standardizer regression tests

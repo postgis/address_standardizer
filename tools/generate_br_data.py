@@ -369,9 +369,21 @@ def generate_br_lex_sql(output_path: str):
     # Add Unit Words
     for word, stdword, tok in UNIT_WORDS:
         entries.append((1, word, stdword, tok))
+        if word == "CASA":
+            # CASA can also occur inside proper street names.  Retain the unit
+            # definition and let grammar context choose this WORD alternative.
+            entries.append((1, word, stdword, 1))
         norm = normalize_text(word)
         if norm != word:
             entries.append((1, norm, normalize_text(stdword), tok))
+            if word == "CASA":
+                entries.append((1, norm, normalize_text(stdword), 1))
+
+    # Highway jurisdiction prefixes need a distinct alternative so route
+    # identifiers can be distinguished from property numbers on named roads.
+    for word, stdword, _ in STREET_TYPES:
+        if len(word) == 2 and word == stdword:
+            entries.append((1, word, stdword, 6))
 
     # Add Directions
     for word, stdword, tok in DIRECTIONS:
@@ -653,18 +665,28 @@ def generate_br_rules_sql(output_path: str):
     ]:
         rules.append((input_prefix + [16], output_prefix + [16], 1, 16))
 
-    # 3. [TYPE] [STREET...] [NUMBER] [UNITH] [WORD/NUMBER] [UNITH] [NUMBER]
-    # Ex: Rua Augusta 100 Bloco B Apto 101
-    rules.append(([2, 1, 0, 19, 1, 19, 0], [4, 5, 1, 16, 17, 16, 17], 1, 17))
-    rules.append(([2, 1, 1, 0, 19, 1, 19, 0], [4, 5, 5, 1, 16, 17, 16, 17], 1, 17))
-    rules.append(([2, 1, 0, 19, 0, 19, 0], [4, 5, 1, 16, 17, 16, 17], 1, 17))
-    rules.append(([2, 1, 1, 0, 19, 0, 19, 0], [4, 5, 5, 1, 16, 17, 16, 17], 1, 17))
-
+    # 3. [TYPE] [STREET...] [NUMBER] [UNITH] [ID] [UNITH] [ID]
+    # Ex: Rua Augusta 100 Bloco B Apto 101A.  Either identifier can be a
+    # WORD, NUMBER, SINGLE, MIXED, or NUMBER + SINGLE sequence.
+    unit_identifiers = [
+        ([1], [17]),
+        ([0], [17]),
+        ([18], [17]),
+        ([23], [17]),
+        ([0, 18], [17, 17]),
+    ]
     for input_prefix, output_prefix in [
         ([2, 1, 0, 19], [4, 5, 1, 16]),
         ([2, 1, 1, 0, 19], [4, 5, 5, 1, 16]),
     ]:
-        rules.append((input_prefix + [18, 19, 0], output_prefix + [17, 16, 17], 1, 17))
+        for first_input, first_output in unit_identifiers:
+            for second_input, second_output in unit_identifiers:
+                rules.append((
+                    input_prefix + first_input + [19] + second_input,
+                    output_prefix + first_output + [16] + second_output,
+                    1,
+                    17,
+                ))
 
     # 4. [TYPE] [STREET...] (Sem número)
     rules.append(([2, 1], [4, 5], 1, 10))
@@ -702,10 +724,13 @@ def generate_br_rules_sql(output_path: str):
                 16,
             ))
     rules.append(([6, 0, 20, 0], [4, 5, 8, 1], 1, 16))
-    rules.append(([6, 1, 0, 20, 0], [4, 5, 5, 8, 1], 1, 16))      # Ex: Rodovia BR 101 Km 150
+    rules.append(([6, 6, 0, 20, 0], [4, 5, 5, 8, 1], 1, 17))      # Ex: Rodovia BR 101 Km 150
     rules.append(([6, 1, 9, 0, 20, 0], [4, 5, 5, 5, 8, 1], 1, 16)) # Ex: Rodovia BR-101 Km 150
-    rules.append(([6, 1, 0], [4, 5, 5], 1, 12))                    # Ex: Rodovia BR 101
+    rules.append(([6, 6, 0], [4, 5, 5], 1, 17))                    # Ex: Rodovia BR 101
     rules.append(([6, 1, 9, 0], [4, 5, 5, 5], 1, 12))              # Ex: Rodovia BR-101
+
+    # A number after a named road is a property number, not part of the name.
+    rules.append(([6, 1, 0], [4, 5, 1], 1, 16))                    # Ex: Rodovia Anhanguera 100
 
     # 7. Padrão Brasília: [TYPE] [NUMBER] [BUILDH] [WORD/SINGLE/NUMBER]
     # Ex: SQS 308 Bloco B / SQS 308 Bloco B Apto 101
