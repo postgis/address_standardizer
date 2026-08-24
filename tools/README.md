@@ -26,6 +26,8 @@ Baixa os dados abertos de endereços e coordenadas GPS do **Censo 2022 do IBGE**
 ### Funcionalidades:
 * **Leitura Direta de `.env`:** Respeita as configurações de banco (`POSTGRES_DB`, `POSTGRES_USER`, etc.) e diretório de armazenamento.
 * **Streaming sem Descompactação em Disco:** O arquivo ZIP original é mantido no disco no diretório configurado, enquanto a extração e transmissão dos registros CSV são feitas diretamente em memória (streaming via COPY), sem necessidade de gravar arquivos intermediários descompactados no disco rígido.
+* **Cache Validado:** Downloads novos passam por verificação CRC completa; arquivos já validados no cache são reutilizados sem descompactar novamente todo o CSV.
+* **Lotes Resilientes:** Importações de múltiplas UFs continuam após uma falha isolada, mostram o resumo das UFs com erro e terminam com código diferente de zero.
 * **Carga em Alta Velocidade:** Insere mais de **70.000 registros/segundo** usando o protocolo nativo `COPY` do PostgreSQL.
 * **Indexação Espacial Automática:** Cria os índices espaciais `GIST (geom)` e `GIN (trigramas)` ao finalizar a carga.
 

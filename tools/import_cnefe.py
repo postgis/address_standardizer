@@ -132,13 +132,13 @@ def get_municipality_map() -> dict:
         raise RuntimeError(f"Não foi possível obter o mapeamento de municípios do IBGE: {e}") from e
 
 
-def validate_cnefe_zip(zip_path: str) -> bool:
+def validate_cnefe_zip(zip_path: str, deep: bool = True) -> bool:
     """Returns whether a downloaded CNEFE archive is readable and contains a CSV."""
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             if find_csv_filename(archive.namelist()) is None:
                 return False
-            return archive.testzip() is None
+            return archive.testzip() is None if deep else True
     except (OSError, zipfile.BadZipFile):
         return False
 
@@ -164,7 +164,7 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
     except FileNotFoundError:
         cached_size = 0
     if cached_size > 1000000:
-        if validate_cnefe_zip(dest_path):
+        if validate_cnefe_zip(dest_path, deep=False):
             print(f"Arquivo já existe em cache: {dest_path} ({cached_size/(1024*1024):.2f} MB)")
             return dest_path
         print(f"Arquivo em cache inválido; baixando novamente: {dest_path}")
@@ -510,20 +510,34 @@ def main() -> None:
     muni_map = get_municipality_map()
     total_start = time.time()
     total_imported = 0
+    failures = []
 
     for idx, uf in enumerate(target_ufs, start=1):
         print(f"\n[{idx}/{len(target_ufs)}] >>> Iniciando UF: {uf} <<<")
-        zip_path = download_cnefe(uf, args.dest)
-        count = import_cnefe_to_postgres(zip_path, uf, args.limit, muni_map=muni_map)
-        total_imported += count
+        try:
+            zip_path = download_cnefe(uf, args.dest)
+            count = import_cnefe_to_postgres(zip_path, uf, args.limit, muni_map=muni_map)
+            total_imported += count
+        except Exception as exc:
+            print(f"❌ Falha na UF {uf}: {exc}", file=sys.stderr)
+            failures.append((uf, str(exc)))
 
     total_elapsed = time.time() - total_start
     print("\n=================================================================")
-    print("🎉 Importação CNEFE Concluída com Sucesso!")
-    print(f"📊 Total de UFs processadas: {len(target_ufs)}")
+    if failures:
+        print("⚠️  Importação CNEFE concluída com falhas.")
+    else:
+        print("🎉 Importação CNEFE Concluída com Sucesso!")
+    print(f"📊 Total de UFs processadas: {len(target_ufs) - len(failures)}")
+    print(f"❌ Total de UFs com falha: {len(failures)}")
+    for uf, error in failures:
+        print(f"   - {uf}: {error}")
     print(f"📍 Total de registros inseridos no PostGIS: {total_imported:,}")
     print(f"⏱️  Tempo total: {total_elapsed:.1f}s ({total_elapsed/60:.1f} min)")
     print("=================================================================\n")
+
+    if failures:
+        raise SystemExit(1)
 
 if __name__ == "__main__":
     main()

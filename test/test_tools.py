@@ -220,6 +220,38 @@ class TestImportCnefe(unittest.TestCase):
                 with open(dest, "rb") as f:
                     self.assertEqual(f.read(), data)
 
+    def test_cached_zip_skips_full_crc_validation(self):
+        """Large cache hits avoid decompressing the whole archive again."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_path = os.path.join(temp_dir, "15_PA.zip")
+            with zipfile.ZipFile(cache_path, "w", zipfile.ZIP_STORED) as archive:
+                archive.writestr("cnefe.csv", b"x" * 1_000_001)
+
+            with patch.object(zipfile.ZipFile, "testzip", side_effect=AssertionError("deep validation")), \
+                 patch("urllib.request.urlopen") as mock_urlopen:
+                self.assertEqual(import_cnefe.download_cnefe("PA", temp_dir), cache_path)
+
+            mock_urlopen.assert_not_called()
+
+    def test_fresh_zip_keeps_full_crc_validation(self):
+        """Freshly downloaded archives retain the full CRC check."""
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tf:
+            zip_path = tf.name
+
+        try:
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                archive.writestr("cnefe.csv", "COD_MUNICIPIO;NOM_SEGLOGR\n")
+
+            with patch.object(zipfile.ZipFile, "testzip", return_value=None) as mock_testzip:
+                self.assertTrue(import_cnefe.validate_cnefe_zip(zip_path))
+                mock_testzip.assert_called_once_with()
+                mock_testzip.reset_mock()
+                self.assertTrue(import_cnefe.validate_cnefe_zip(zip_path, deep=False))
+                mock_testzip.assert_not_called()
+        finally:
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
+
     def test_download_cnefe_tolerates_concurrent_cache_removal(self):
         """Another downloader may remove an invalid cache entry first."""
         data = self.cnefe_zip_bytes()
@@ -608,6 +640,26 @@ class TestImportCnefe(unittest.TestCase):
         for value in (0, -1):
             with self.assertRaises(ValueError):
                 import_cnefe.import_cnefe_to_postgres("/tmp/fake.zip", "SP", limit=value)
+
+    def test_batch_import_continues_after_a_uf_failure(self):
+        """A failed UF is reported after the remaining selected UFs run."""
+        with tempfile.TemporaryDirectory() as temp_dir, \
+             patch.object(sys, "argv", ["import_cnefe.py", "--uf", "SP,RJ,MG", "--dest", temp_dir]), \
+             patch("import_cnefe.get_municipality_map", return_value={}), \
+             patch("import_cnefe.download_cnefe", side_effect=["SP.zip", RuntimeError("network down"), "MG.zip"]) as mock_download, \
+             patch("import_cnefe.import_cnefe_to_postgres", side_effect=[10, 20]) as mock_import, \
+             patch("import_cnefe.sys.stderr", new_callable=io.StringIO) as stderr, \
+             patch("import_cnefe.sys.stdout", new_callable=io.StringIO) as stdout:
+            with self.assertRaises(SystemExit) as raised:
+                import_cnefe.main()
+
+        self.assertEqual(raised.exception.code, 1)
+        self.assertEqual([call.args[0] for call in mock_download.call_args_list], ["SP", "RJ", "MG"])
+        self.assertEqual([call.args[1] for call in mock_import.call_args_list], ["SP", "MG"])
+        self.assertIn("Falha na UF RJ: network down", stderr.getvalue())
+        self.assertIn("Total de UFs processadas: 2", stdout.getvalue())
+        self.assertIn("Total de UFs com falha: 1", stdout.getvalue())
+        self.assertIn("- RJ: network down", stdout.getvalue())
 
     def test_copy_process_is_reaped_when_streaming_fails(self):
         """A CSV read failure must close psql's stdin and wait for the child."""
