@@ -503,6 +503,27 @@ class TestBrazilianCnefeGeocoder(unittest.TestCase):
         self.assertIn("database sh -eu -c", docs_content)
         self.assertIn("'exec psql -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"", docs_content)
 
+    def test_translated_guide_keeps_executable_examples_in_sync(self):
+        """English and pt-BR prose may differ, but their commands and SQL may not."""
+        english_path = os.path.join(EXAMPLE_DIR, "README.md")
+        portuguese_path = os.path.join(EXAMPLE_DIR, "README.pt-BR.md")
+
+        with open(english_path, "r", encoding="utf-8") as f:
+            english = f.read()
+        with open(portuguese_path, "r", encoding="utf-8") as f:
+            portuguese = f.read()
+
+        def executable_blocks(markdown):
+            blocks = []
+            for block in markdown.split("```")[1::2]:
+                lines = block.splitlines()[1:]
+                blocks.append("\n".join(line for line in lines if not line.startswith("#")))
+            return blocks
+
+        self.assertEqual(executable_blocks(english), executable_blocks(portuguese))
+        self.assertIn("[Português (Brasil)](README.pt-BR.md)", english)
+        self.assertIn("[English](README.md)", portuguese)
+
     def test_ci_runs_cnefe_tooling_tests(self):
         """The CNEFE importer tests must run in every GitHub Actions matrix job."""
         workflow_path = os.path.join(REPO_ROOT, ".github", "workflows", "ci.yml")

@@ -1,5 +1,7 @@
 # Brazilian CNEFE geocoder example
 
+English | [Português (Brasil)](README.pt-BR.md)
+
 This optional example combines `address_standardizer` with PostGIS and the
 Brazilian 2022 CNEFE address dataset published by IBGE.
 

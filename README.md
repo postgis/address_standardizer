@@ -130,10 +130,12 @@ SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'SQS 308 Bloco
 SELECT * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Quadra 10 Lote 5', 'Goiania, GO');
 ```
 
-An [optional Brazilian CNEFE geocoder example](examples/brazilian_cnefe_geocoder/README.md)
-shows how an application can combine these standardized components with an
-external IBGE address reference table. The example is not part of the
-`address_standardizer` extension or the US Census TIGER geocoder.
+An optional Brazilian CNEFE geocoder example shows how an application can
+combine these standardized components with an external IBGE address reference
+table. Read the guide in [English](examples/brazilian_cnefe_geocoder/README.md)
+or [Português (Brasil)](examples/brazilian_cnefe_geocoder/README.pt-BR.md). The
+example is not part of the `address_standardizer` extension or the US Census
+TIGER geocoder.
 
 
 # Development
