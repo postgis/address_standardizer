@@ -86,7 +86,7 @@ static int _Is_Alphabetic_Character_(const char *character)
 	}
 	if (GetDatabaseEncoding() == PG_UTF8)
 	{
-		int length = pg_utf_mblen((const unsigned char *) character) ;
+		int length = _Character_Length_(character) ;
 		pg_wchar codepoint ;
 
 		if (!pg_utf8_islegal((const unsigned char *) character, length))
@@ -154,7 +154,7 @@ static int _Is_Combining_Mark_(const char *character)
 		return FALSE ;
 	}
 	{
-		int length = pg_utf_mblen((const unsigned char *) character) ;
+		int length = _Character_Length_(character) ;
 
 		if (!pg_utf8_islegal((const unsigned char *) character, length))
 		{
