@@ -10,9 +10,9 @@ O sistema de geocodificação é dividido em duas etapas complementares:
 
 ```mermaid
 flowchart TD
-    Raw["1. Texto do Usuário\n'r. augusta 100 ap 12, sao paulo, sp'"] --> Parser["2. address_standardizer\n(Gramática, Dicionários, Regras BR)"]
+    Raw["1. Texto do Usuário\n'r. augusta 100, sao paulo, sp'"] --> Parser["2. address_standardizer\n(Gramática, Dicionários, Regras BR)"]
 
-    Parser --> Clean["3. Endereço Estruturado\npretype='RUA'\nname='AUGUSTA'\nhouse_num='100'\nunit='APTO 12'\ncity='SAO PAULO'\nstate='SP'"]
+    Parser --> Clean["3. Endereço Estruturado\npretype='RUA'\nname='AUGUSTA'\nhouse_num='100'\ncity='SAO PAULO'\nstate='SP'"]
 
     Clean --> Search["4. Consulta SQL com Índices\n(Busca Exata + Fuzzy pg_trgm)"]
 
@@ -23,6 +23,8 @@ flowchart TD
 
 * **`address_standardizer` (Etapa 1):** O motor gramatical leve (~1 MB). Ele não armazena todas as ruas do país, mas sabe como o brasileiro escreve endereços e desmembra o texto livre em colunas consistentes.
 * **CNEFE do IBGE (Etapa 2):** A base física de referência (~15 a 30 GB no PostgreSQL com 111+ milhões de pontos). Armazena as coordenadas geográficas coletadas no Censo 2022 (quando disponíveis para o endereço).
+
+> **Escopo de resolução:** a importação e as consultas CNEFE resolvem o endereço no nível de edifício e número. Apartamento, unidade e complemento não são armazenados nem distinguidos.
 
 ---
 
@@ -78,7 +80,7 @@ CREATE INDEX IF NOT EXISTS idx_cnefe_logr_trgm
 
 ## 3. Consultas de Geocodificação (Como Cruzar os Dados)
 
-### Consulta 1: Geocodificação Exata (Endereço Completo)
+### Consulta 1: Geocodificação Exata (Edifício e Número)
 
 Recebendo uma string livre do usuário (ex: formulário de checkout ou entrega):
 
@@ -86,7 +88,7 @@ Recebendo uma string livre do usuário (ex: formulário de checkout ou entrega):
 WITH parsed AS (
     SELECT * FROM standardize_address(
         'br_lex', 'br_gaz', 'br_rules',
-        'Rua Augusta, 100 Apto 42',
+        'Rua Augusta, 100',
         'Sao Paulo, SP'
     )
 )
