@@ -59,3 +59,40 @@ SELECT '#br10' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rul
  #br10  |          | 100       |        |      | RUA     | AUGUSTA |         |        |            |       | SAO PAULO | SP    | BRASIL  | 01310 100 |     | 
 (1 row)
 
+SELECT '#br11' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Norte, 100', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype | name  | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+-------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br11  |          | 100       |        |      | RUA     | NORTE |         |        |            |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+SELECT '#br12' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rodovia Presidente Castelo Branco Km 30', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype |           name            | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+---------------------------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br12  |          | 30        |        |      | RODOVIA | PRESIDENTE CASTELO BRANCO |         |        | KM         |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+SELECT '#br13' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Augusta Numero 100', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype |  name   | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+---------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br13  |          | 100       |        |      | RUA     | AUGUSTA |         |        |            |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+SELECT '#br14' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Estrada dos Romeiros Km 30', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype |     name     | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+--------------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br14  |          | 30        |        |      | ESTRADA | DOS ROMEIROS |         |        | KM         |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+SELECT '#br15' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Augusta No 100', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype |  name   | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+---------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br15  |          | 100       |        |      | RUA     | AUGUSTA |         |        |            |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+SELECT '#br16' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Noroeste 100', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype |   name   | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+----------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br16  |          | 100       |        |      | RUA     | NOROESTE |         |        |            |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+-- End Brazilian address standardizer regression tests

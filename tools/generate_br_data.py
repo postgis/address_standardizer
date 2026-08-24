@@ -225,12 +225,15 @@ UNIT_WORDS = [
     ("KM", "KM", 20),
     ("QUILOMETRO", "KM", 20),
     ("QUILÔMETRO", "KM", 20),
-    ("NUMERO", "NUMERO", 19),
-    ("NÚMERO", "NUMERO", 19),
-    ("NUM", "NUMERO", 19),
-    ("Nº", "NUMERO", 19),
-    ("N.", "NUMERO", 19),
-    ("NO", "NUMERO", 19),
+    # House-number headers participate in grammar matching but are not part of
+    # the standardized address.  An empty standard word lets a rule consume
+    # the header without leaking it into the unit or house-number fields.
+    ("NUMERO", "", 19),
+    ("NÚMERO", "", 19),
+    ("NUM", "", 19),
+    ("Nº", "", 19),
+    ("N.", "", 19),
+    ("NO", "", 19),
     ("S/N", "S/N", 0),
     ("SN", "S/N", 0),
     ("SEM NUMERO", "S/N", 0),
@@ -545,8 +548,19 @@ def generate_br_rules_sql(output_path: str):
     rules.append(([2, 1, 1, 7, 1, 1, 0], [4, 5, 5, 5, 5, 5, 1], 1, 16))
 
     # With Cardinal direction: Ex: Rua Augusta Norte 100
+    rules.append(([2, 22, 0], [4, 5, 1], 1, 16))
     rules.append(([2, 1, 22, 0], [4, 5, 7, 1], 1, 16))
     rules.append(([2, 1, 1, 22, 0], [4, 5, 5, 7, 1], 1, 16))
+
+    # Explicit house-number headers (Ex: Rua Augusta Numero 100).
+    # Keep the header out of the street name and map the following value to HOUSE.
+    for word_count in range(1, 5):
+        rules.append((
+            [2] + ([1] * word_count) + [19, 0],
+            [4] + ([5] * word_count) + [16, 1],
+            1,
+            16,
+        ))
 
     # Letter-suffixed and mixed house numbers (Ex: Rua Augusta 100A).
     # The scanner can expose a suffix as NUMBER + SINGLE or as one MIXED token.
@@ -624,12 +638,25 @@ def generate_br_rules_sql(output_path: str):
     rules.append(([1, 1, 1, 0], [5, 5, 5, 1], 1, 12))
     rules.append(([1, 7, 1, 0], [5, 5, 5, 1], 1, 12))
 
-    # 6. Rodovias: [ROAD] [WORD...] [MILE] [NUMBER]
-    # Ex: Rodovia dos Imigrantes Km 50 / Rodovia BR-101 Km 100 / Rodovia Anhanguera Km 15
-    rules.append(([6, 1, 20, 0], [4, 5, 8, 1], 1, 16))
-    rules.append(([6, 1, 1, 20, 0], [4, 5, 5, 8, 1], 1, 16))
-    rules.append(([6, 7, 1, 20, 0], [4, 5, 5, 8, 1], 1, 16))
-    rules.append(([6, 7, 1, 1, 20, 0], [4, 5, 5, 5, 8, 1], 1, 16))
+    # 6. Kilometer-addressed roads: [ROAD/TYPE] [WORD...] [MILE] [NUMBER]
+    # RODOVIA has the dedicated ROAD token, while ESTRADA shares TYPE with
+    # ordinary thoroughfares, so both input tokens need the same rule shapes.
+    # Ex: Rodovia Presidente Castelo Branco Km 30 / Estrada dos Romeiros Km 30
+    for road_token in [6, 2]:
+        for word_count in range(1, 5):
+            rules.append((
+                [road_token] + ([1] * word_count) + [20, 0],
+                [4] + ([5] * word_count) + [8, 1],
+                1,
+                16,
+            ))
+        for word_count in range(1, 4):
+            rules.append((
+                [road_token, 7] + ([1] * word_count) + [20, 0],
+                [4, 5] + ([5] * word_count) + [8, 1],
+                1,
+                16,
+            ))
     rules.append(([6, 0, 20, 0], [4, 5, 8, 1], 1, 16))
     rules.append(([6, 1, 0, 20, 0], [4, 5, 5, 8, 1], 1, 16))      # Ex: Rodovia BR 101 Km 150
     rules.append(([6, 1, 9, 0, 20, 0], [4, 5, 5, 5, 8, 1], 1, 16)) # Ex: Rodovia BR-101 Km 150

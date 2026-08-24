@@ -15,6 +15,7 @@ AS_VERSION = $(shell grep default $(EXTENSION).control | cut -f2 -d'=' | tr -d "
 # install you are building against
 #
 PG_CONFIG = pg_config
+PYTHON ?= python3
 
 MODULE_big = $(EXTENSION)
 DATA = $(DATA_EXTENSION).control $(DATA_EXTENSION_BR).control
@@ -96,7 +97,7 @@ data/$(DATA_EXTENSION_BR)--ANY--$(AS_VERSION).sql: data/$(DATA_EXTENSION_BR)_cor
 	cat $^ > $@
 
 
-.PHONY: dist check test-rules-api
+.PHONY: dist check test-rules-api test-br-data-generator
 dist:
 	git archive --prefix=$(DISTNAME)/ HEAD | gzip > $(DISTARCHIVE)
 
@@ -109,6 +110,9 @@ include $(PGXS)
 test-rules-api: test/rules_api_test
 	./test/rules_api_test
 
+test-br-data-generator:
+	$(PYTHON) test/test_generate_br_data.py -q
+
 # gettext() lives in libc on glibc/Linux; other ports with NLS need -lintl
 ifeq ($(enable_nls),yes)
 ifneq ($(PORTNAME),linux)
@@ -119,7 +123,7 @@ endif
 test/rules_api_test: test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_tools.c src/standard.c src/tokenize.c src/lexicon.c src/hash.c src/analyze.c src/export.c src/pagc_api.h src/pagc_std_api.h src/gamma.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(PG_CPPFLAGS) -DPAGC_STANDALONE -ffunction-sections -Isrc -I$(shell $(PG_CONFIG) --includedir-server) -o $@ test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_tools.c src/standard.c src/tokenize.c src/lexicon.c src/hash.c src/analyze.c src/export.c -Wl,--gc-sections -L$(shell $(PG_CONFIG) --pkglibdir) -lpgcommon -lpgport $(RULES_API_TEST_LIBS)
 
-installcheck: test-rules-api
+installcheck: test-rules-api test-br-data-generator
 
-check: test-rules-api
+check: test-rules-api test-br-data-generator
 	PG_CONFIG="$(PG_CONFIG)" MAKE="$(MAKE)" sh tools/run-check.sh

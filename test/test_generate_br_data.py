@@ -167,6 +167,28 @@ class TestGenerateBrData(unittest.TestCase):
             self.assertIn("'SÃO PAULO', 'SAO PAULO', 10", content)
             self.assertIn("'SÃO PAULO', 'SAO PAULO', 1", content)
 
+    def test_house_number_headers_are_consumed_without_output_text(self):
+        """House-number headers match BUILDH rules without becoming address fields."""
+        with tempfile.NamedTemporaryFile(suffix=".sql") as tf:
+            generate_br_data.generate_br_lex_sql(tf.name)
+            with open(tf.name, "r", encoding="utf-8") as f:
+                content = f.read()
+
+        self.assertIn("'NUMERO', '', 19", content)
+        self.assertIn("'NÚMERO', '', 19", content)
+
+    def test_rules_cover_reviewed_brazilian_address_forms(self):
+        """The generated rules cover direction names, long highways, and number headers."""
+        with tempfile.NamedTemporaryFile(suffix=".sql") as tf:
+            generate_br_data.generate_br_rules_sql(tf.name)
+            with open(tf.name, "r", encoding="utf-8") as f:
+                content = f.read()
+
+        self.assertIn("2 22 0 -1 4 5 1 -1 1 16", content)
+        self.assertIn("6 1 1 1 20 0 -1 4 5 5 5 8 1 -1 1 16", content)
+        self.assertIn("2 7 1 20 0 -1 4 5 5 8 1 -1 1 16", content)
+        self.assertIn("2 1 19 0 -1 4 5 16 1 -1 1 16", content)
+
     def test_control_file_version_synchronization(self):
         """Verify that all extension control files have synchronized versions."""
         control_files = [
