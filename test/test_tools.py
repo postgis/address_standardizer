@@ -94,7 +94,7 @@ class TestImportCnefe(unittest.TestCase):
 
         try:
             with zipfile.ZipFile(zip_path, "w") as zf:
-                zf.writestr("test_cnefe.csv", csv_data)
+                zf.writestr("test_cnefe.CSV", "\ufeff" + csv_data)
 
             captured_output = []
 
@@ -211,6 +211,40 @@ class TestImportCnefe(unittest.TestCase):
                 self.assertTrue(os.path.exists(dest))
                 with open(dest, "rb") as f:
                     self.assertEqual(f.read(), data)
+
+    def test_download_cnefe_tolerates_concurrent_cache_removal(self):
+        """Another downloader may remove an invalid cache entry first."""
+        data = self.cnefe_zip_bytes()
+        mock_resp = MagicMock()
+        mock_resp.headers = {"Content-Length": str(len(data))}
+        mock_resp.read.side_effect = [data, b""]
+        mock_resp.__enter__.return_value = mock_resp
+        mock_resp.__exit__.return_value = False
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_path = os.path.join(temp_dir, "15_PA.zip")
+            with open(cache_path, "wb") as cache:
+                cache.write(b"not a ZIP archive" * 70_000)
+
+            with patch("urllib.request.urlopen", return_value=mock_resp), \
+                 patch("import_cnefe.os.remove", side_effect=FileNotFoundError):
+                dest = import_cnefe.download_cnefe("PA", temp_dir)
+
+            with open(dest, "rb") as cache:
+                self.assertEqual(cache.read(), data)
+
+    def test_uppercase_csv_member_is_valid(self):
+        """Validation and import agree that .CSV members are CSV files."""
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tf:
+            zip_path = tf.name
+
+        try:
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                archive.writestr("CNEFE.CSV", "COD_MUNICIPIO;NOM_SEGLOGR\n")
+            self.assertTrue(import_cnefe.validate_cnefe_zip(zip_path))
+        finally:
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
 
     def test_download_cnefe_uses_unique_temp_paths(self):
         """Concurrent downloads cannot share a temporary archive path."""

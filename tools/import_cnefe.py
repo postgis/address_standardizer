@@ -136,11 +136,16 @@ def validate_cnefe_zip(zip_path: str) -> bool:
     """Returns whether a downloaded CNEFE archive is readable and contains a CSV."""
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
-            if not any(name.lower().endswith(".csv") for name in archive.namelist()):
+            if find_csv_filename(archive.namelist()) is None:
                 return False
             return archive.testzip() is None
     except (OSError, zipfile.BadZipFile):
         return False
+
+
+def find_csv_filename(names: list[str]) -> Optional[str]:
+    """Returns the first CSV member name, case-insensitively."""
+    return next((name for name in names if name.lower().endswith(".csv")), None)
 
 
 def download_cnefe(uf: str, dest_dir: str) -> str:
@@ -159,7 +164,10 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
             print(f"Arquivo já existe em cache: {dest_path} ({os.path.getsize(dest_path)/(1024*1024):.2f} MB)")
             return dest_path
         print(f"Arquivo em cache inválido; baixando novamente: {dest_path}")
-        os.remove(dest_path)
+        try:
+            os.remove(dest_path)
+        except FileNotFoundError:
+            pass
 
     url = f"https://ftp.ibge.gov.br/Cadastro_Nacional_de_Enderecos_para_Fins_Estatisticos/Censo_Demografico_2022/Arquivos_CNEFE/CSV/UF/{filename}"
     print(f"Baixando CNEFE oficial do IBGE para {uf_upper}: {url}")
@@ -302,7 +310,7 @@ def import_cnefe_to_postgres(
     try:
         print(f"Lendo e transmitindo dados de {zip_path}...")
         with zipfile.ZipFile(zip_path, 'r') as z:
-            csv_filename = next((name for name in z.namelist() if name.endswith('.csv')), None)
+            csv_filename = find_csv_filename(z.namelist())
             if not csv_filename:
                 raise FileNotFoundError(f"Nenhum arquivo CSV encontrado dentro do arquivo ZIP: {zip_path}")
             print(f"Arquivo CSV interno: {csv_filename}")
@@ -322,7 +330,7 @@ def import_cnefe_to_postgres(
                 count = 0
 
                 with z.open(csv_filename, 'r') as raw_file:
-                    text_stream = io.TextIOWrapper(raw_file, encoding='utf-8', errors='ignore')
+                    text_stream = io.TextIOWrapper(raw_file, encoding='utf-8-sig', errors='ignore')
                     reader = csv.DictReader(text_stream, delimiter=';')
 
                     for row in reader:
