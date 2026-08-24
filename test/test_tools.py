@@ -233,6 +233,23 @@ class TestImportCnefe(unittest.TestCase):
             with open(dest, "rb") as cache:
                 self.assertEqual(cache.read(), data)
 
+    def test_download_cnefe_tolerates_cache_removal_before_stat(self):
+        """A cache entry may disappear between discovery and the initial stat."""
+        data = self.cnefe_zip_bytes()
+        mock_resp = MagicMock()
+        mock_resp.headers = {"Content-Length": str(len(data))}
+        mock_resp.read.side_effect = [data, b""]
+        mock_resp.__enter__.return_value = mock_resp
+        mock_resp.__exit__.return_value = False
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("urllib.request.urlopen", return_value=mock_resp), \
+                 patch("import_cnefe.os.path.getsize", side_effect=[FileNotFoundError, len(data)]):
+                dest = import_cnefe.download_cnefe("PA", temp_dir)
+
+            with open(dest, "rb") as cache:
+                self.assertEqual(cache.read(), data)
+
     def test_uppercase_csv_member_is_valid(self):
         """Validation and import agree that .CSV members are CSV files."""
         with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tf:

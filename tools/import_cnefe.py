@@ -159,9 +159,13 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
 
     filename = f"{code}_{uf_upper}.zip"
     dest_path = os.path.join(dest_dir, filename)
-    if os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000000:
+    try:
+        cached_size = os.path.getsize(dest_path)
+    except FileNotFoundError:
+        cached_size = 0
+    if cached_size > 1000000:
         if validate_cnefe_zip(dest_path):
-            print(f"Arquivo já existe em cache: {dest_path} ({os.path.getsize(dest_path)/(1024*1024):.2f} MB)")
+            print(f"Arquivo já existe em cache: {dest_path} ({cached_size/(1024*1024):.2f} MB)")
             return dest_path
         print(f"Arquivo em cache inválido; baixando novamente: {dest_path}")
         try:
