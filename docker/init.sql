@@ -9,6 +9,7 @@
 --   set -a; . ./.env; set +a; docker compose down; rm -rf -- "${POSTGRES_DATA_DIR:-./.pgdata}"; docker compose up -d
 --
 CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS address_standardizer;
 
 -- Carregamento dos datasets do Brasil (Léxico, Gazetteer dos 5.571 municípios/UFs e Regras PAGC)

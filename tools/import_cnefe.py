@@ -15,6 +15,7 @@ import os
 import secrets
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Optional
 import unicodedata
@@ -153,8 +154,6 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
 
     filename = f"{code}_{uf_upper}.zip"
     dest_path = os.path.join(dest_dir, filename)
-    tmp_path = dest_path + ".tmp"
-
     if os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000000:
         if validate_cnefe_zip(dest_path):
             print(f"Arquivo já existe em cache: {dest_path} ({os.path.getsize(dest_path)/(1024*1024):.2f} MB)")
@@ -168,39 +167,39 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
 
     start_time = time.time()
     req = urllib.request.Request(url, headers={'User-Agent': 'PostGIS-CNEFE-Importer/1.0'})
-    with urllib.request.urlopen(req, timeout=120) as response, open(tmp_path, "wb") as out_file:
-        total_size = int(response.headers.get('Content-Length', 0))
-        downloaded = 0
-        chunk_size = 1024 * 1024
-        
-        while True:
-            chunk = response.read(chunk_size)
-            if not chunk:
-                break
-            out_file.write(chunk)
-            downloaded += len(chunk)
-            if total_size > 0:
-                percent = (downloaded / total_size) * 100
-                mb_down = downloaded / (1024 * 1024)
-                mb_total = total_size / (1024 * 1024)
-                print(f"\rProgresso do Download: {percent:.1f}% ({mb_down:.1f}/{mb_total:.1f} MB)", end="", flush=True)
+    tmp_fd, tmp_path = tempfile.mkstemp(prefix=f".{filename}.", suffix=".tmp", dir=dest_dir)
+    os.close(tmp_fd)
+    try:
+        with urllib.request.urlopen(req, timeout=120) as response, open(tmp_path, "wb") as out_file:
+            total_size = int(response.headers.get('Content-Length', 0))
+            downloaded = 0
+            chunk_size = 1024 * 1024
 
-    if total_size > 0 and downloaded != total_size:
+            while True:
+                chunk = response.read(chunk_size)
+                if not chunk:
+                    break
+                out_file.write(chunk)
+                downloaded += len(chunk)
+                if total_size > 0:
+                    percent = (downloaded / total_size) * 100
+                    mb_down = downloaded / (1024 * 1024)
+                    mb_total = total_size / (1024 * 1024)
+                    print(f"\rProgresso do Download: {percent:.1f}% ({mb_down:.1f}/{mb_total:.1f} MB)", end="", flush=True)
+
+        if total_size > 0 and downloaded != total_size:
+            raise IOError(f"Download truncado para {uf_upper}: recebidos {downloaded} bytes de {total_size} bytes esperados.")
+
+        if not validate_cnefe_zip(tmp_path):
+            raise IOError(f"Download inválido ou corrompido para {uf_upper}; arquivo ZIP não foi salvo em cache.")
+
+        os.replace(tmp_path, dest_path)
+        elapsed = time.time() - start_time
+        print(f"\n✅ Download concluído em {elapsed:.1f}s ({os.path.getsize(dest_path)/(1024*1024):.2f} MB).")
+        return dest_path
+    finally:
         if os.path.exists(tmp_path):
-            try:
-                os.remove(tmp_path)
-            except OSError:
-                pass
-        raise IOError(f"Download truncado para {uf_upper}: recebidos {downloaded} bytes de {total_size} bytes esperados.")
-
-    if not validate_cnefe_zip(tmp_path):
-        os.remove(tmp_path)
-        raise IOError(f"Download inválido ou corrompido para {uf_upper}; arquivo ZIP não foi salvo em cache.")
-
-    os.replace(tmp_path, dest_path)
-    elapsed = time.time() - start_time
-    print(f"\n✅ Download concluído em {elapsed:.1f}s ({os.path.getsize(dest_path)/(1024*1024):.2f} MB).")
-    return dest_path
+            os.remove(tmp_path)
 
 def ensure_tables_exist() -> None:
     """Ensures that the cnefe_enderecos table, staging table, and required extensions exist in PostgreSQL."""
@@ -316,69 +315,77 @@ def import_cnefe_to_postgres(
             psql_cmd = psql_base_cmd() + ["-c", copy_sql]
 
             proc = subprocess.Popen(psql_cmd, stdin=subprocess.PIPE, text=True, bufsize=65536)
-            tsv_writer = csv.writer(proc.stdin, delimiter='\t', lineterminator='\n', quoting=csv.QUOTE_MINIMAL)
-            
-            start_time = time.time()
-            count = 0
-            
-            with z.open(csv_filename, 'r') as raw_file:
-                text_stream = io.TextIOWrapper(raw_file, encoding='utf-8', errors='ignore')
-                reader = csv.DictReader(text_stream, delimiter=';')
-                
-                for row in reader:
-                    cod_muni_str = row.get("COD_MUNICIPIO", "").strip()
-                    if not cod_muni_str:
-                        continue
-                    try:
-                        cod_muni = int(cod_muni_str)
-                    except ValueError:
-                        continue
-                    if not cod_muni:
-                        continue
-                    
-                    logr_base = remove_accents(row.get("NOM_SEGLOGR", ""))
-                    if not logr_base:
-                        continue  # Filter out records without a street name
-                    
-                    muni_info = muni_map.get(cod_muni, ("", uf_upper))
-                    municipio = muni_info[0]
-                    if not municipio:
-                        continue  # Filter out records without a mapped municipality name
-                    
-                    tipo = remove_accents(row.get("NOM_TIPO_SEGLOGR", ""))
-                    titulo = remove_accents(row.get("NOM_TITULO_SEGLOGR", ""))
-                    
-                    if titulo:
-                        logradouro = f"{titulo} {logr_base}".strip()
-                    else:
+            try:
+                tsv_writer = csv.writer(proc.stdin, delimiter='\t', lineterminator='\n', quoting=csv.QUOTE_MINIMAL)
+
+                start_time = time.time()
+                count = 0
+
+                with z.open(csv_filename, 'r') as raw_file:
+                    text_stream = io.TextIOWrapper(raw_file, encoding='utf-8', errors='ignore')
+                    reader = csv.DictReader(text_stream, delimiter=';')
+
+                    for row in reader:
+                        cod_muni_str = row.get("COD_MUNICIPIO", "").strip()
+                        if not cod_muni_str:
+                            continue
+                        try:
+                            cod_muni = int(cod_muni_str)
+                        except ValueError:
+                            continue
+                        if not cod_muni:
+                            continue
+
+                        logr_base = remove_accents(row.get("NOM_SEGLOGR", ""))
+                        if not logr_base:
+                            continue  # Filter out records without a street name
+
+                        muni_info = muni_map.get(cod_muni, ("", uf_upper))
+                        municipio = muni_info[0]
+                        if not municipio:
+                            continue  # Filter out records without a mapped municipality name
+
+                        tipo = remove_accents(row.get("NOM_TIPO_SEGLOGR", ""))
+                        titulo = remove_accents(row.get("NOM_TITULO_SEGLOGR", ""))
+                        # NOM_SEGLOGR is the canonical key emitted as p.name by the standardizer.
                         logradouro = logr_base
-                    
-                    numero = row.get("NUM_ENDERECO", "").strip()
-                    modificador = row.get("DSC_MODIFICADOR", "").strip()
-                    bairro = remove_accents(row.get("DSC_LOCALIDADE", ""))
-                    cep = row.get("CEP", "").strip()
-                    
-                    lat_str = row.get("NUM_LATITUDE", "").replace(",", ".").strip()
-                    lon_str = row.get("NUM_LONGITUDE", "").replace(",", ".").strip()
-                    
-                    tsv_writer.writerow([
-                        cod_muni, municipio, uf_upper, tipo, titulo, logradouro,
-                        numero, modificador, bairro, cep, lat_str, lon_str
-                    ])
-                    count += 1
-                    
-                    if count % 100000 == 0:
-                        elapsed = time.time() - start_time
-                        speed = count / elapsed if elapsed > 0 else 0
-                        print(f"\rProcessando e inserindo: {count:,} linhas ({speed:.0f} linhas/s)...", end="", flush=True)
-                    
-                    if limit is not None and count >= limit:
-                        break
-            
-            proc.stdin.close()
-            return_code = proc.wait()
-            if return_code != 0:
-                raise subprocess.CalledProcessError(return_code, psql_cmd)
+
+                        numero = row.get("NUM_ENDERECO", "").strip()
+                        modificador = row.get("DSC_MODIFICADOR", "").strip()
+                        bairro = remove_accents(row.get("DSC_LOCALIDADE", ""))
+                        cep = row.get("CEP", "").strip()
+                        # CNEFE 2022's published CSV dictionary names these columns exactly.
+                        lat_str = row.get("LATITUDE", "").replace(",", ".").strip()
+                        lon_str = row.get("LONGITUDE", "").replace(",", ".").strip()
+
+                        tsv_writer.writerow([
+                            cod_muni, municipio, uf_upper, tipo, titulo, logradouro,
+                            numero, modificador, bairro, cep, lat_str, lon_str
+                        ])
+                        count += 1
+
+                        if count % 100000 == 0:
+                            elapsed = time.time() - start_time
+                            speed = count / elapsed if elapsed > 0 else 0
+                            print(f"\rProcessando e inserindo: {count:,} linhas ({speed:.0f} linhas/s)...", end="", flush=True)
+
+                        if limit is not None and count >= limit:
+                            break
+
+                proc.stdin.close()
+                return_code = proc.wait()
+                if return_code != 0:
+                    raise subprocess.CalledProcessError(return_code, psql_cmd)
+            except BaseException:
+                try:
+                    proc.stdin.close()
+                except (OSError, ValueError):
+                    pass
+                try:
+                    proc.wait()
+                except OSError:
+                    pass
+                raise
             
             elapsed = time.time() - start_time
             print(f"\n✅ Total inserido em staging ({stage_table}): {count:,} registros em {elapsed:.1f}s.")
@@ -390,6 +397,7 @@ def import_cnefe_to_postgres(
         print(f"\nAplicando transação atômica para substituir dados da UF: {uf_upper}...")
         atomic_swap_sql = f"""
         BEGIN;
+        SELECT pg_advisory_xact_lock(hashtext('cnefe_enderecos:{uf_upper}'));
         DELETE FROM cnefe_enderecos WHERE uf = '{uf_upper}';
         INSERT INTO cnefe_enderecos (
             cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro,

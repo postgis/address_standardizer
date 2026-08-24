@@ -44,8 +44,8 @@ CREATE TABLE IF NOT EXISTS cnefe_enderecos (
     municipio text NOT NULL,
     uf varchar(2) NOT NULL,
     tipo text,              -- RUA, AVENIDA, etc.
-    titulo text,            -- DOUTOR, PRESIDENTE, etc.
-    logradouro text NOT NULL, -- AUGUSTA, PAULISTA, etc.
+    titulo text,            -- DOUTOR, PRESIDENTE, etc. (metadata separate from the matching key)
+    logradouro text NOT NULL, -- NOM_SEGLOGR canonical key, e.g. AUGUSTA or VARGAS
     numero text,            -- 100, 1000, 0
     modificador text,       -- SN, KM, etc.
     bairro text,            -- BELA VISTA, CENTRO
@@ -138,6 +138,7 @@ FROM cnefe_enderecos c, parsed p
 WHERE c.uf = p.state
   AND c.municipio = p.city
   AND c.numero = p.house_num
+  AND c.tipo = p.pretype
   AND c.logradouro % p.name -- Operador de similaridade de trigramas
 ORDER BY score_similaridade DESC
 LIMIT 5;
@@ -151,7 +152,7 @@ Encontrar o endereço e CEP mais próximos de um ponto no mapa (ex: GPS do motor
 
 ```sql
 SELECT 
-    CONCAT_WS(' ', c.tipo, c.logradouro) || COALESCE(', ' || NULLIF(c.numero, '0'), '') AS endereco,
+    CONCAT_WS(' ', c.tipo, c.titulo, c.logradouro) || COALESCE(', ' || NULLIF(c.numero, '0'), '') AS endereco,
     c.bairro,
     c.municipio,
     c.uf,
