@@ -324,8 +324,11 @@ void upper_case( char *d ,
       int source_length = strlen(s) ;
       pg_wchar *wide = palloc((source_length + 1) * sizeof(pg_wchar)) ;
       pg_wchar *normalized ;
-      char *nfc = palloc(source_length + 1) ;
+      char *nfc ;
       int wide_length ;
+      int normalized_length ;
+      int nfc_length ;
+      Size nfc_capacity ;
 
       /* The BR generator uses Python's locale-independent upper().  Keep the
        * corresponding ASCII and Portuguese Latin-1 mappings independent of
@@ -333,7 +336,13 @@ void upper_case( char *d ,
       wide_length = pg_mb2wchar_with_len(s, wide, source_length) ;
       wide[wide_length] = 0 ;
       normalized = unicode_normalize(UNICODE_NFC, wide) ;
-      pg_wchar2mb(normalized, nfc) ;
+      for (normalized_length = 0 ; normalized[normalized_length] != 0 ;
+           normalized_length++)
+         ;
+      nfc_capacity = (Size) normalized_length * MAX_MULTIBYTE_CHAR_LEN + 1 ;
+      nfc = palloc(nfc_capacity) ;
+      nfc_length = pg_wchar2mb_with_len(normalized, nfc, normalized_length) ;
+      nfc[nfc_length] = SENTINEL ;
       s = nfc ;
       while ((*s != SENTINEL) && (d < end)) {
          unsigned char first = (unsigned char) s[0] ;

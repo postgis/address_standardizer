@@ -67,6 +67,11 @@ BEGIN
 	   OR standardized.name IS DISTINCT FROM 'MAIN' THEN
 		RAISE EXCEPTION 'scanner changed an address with trailing spaces';
 	END IF;
+
+	-- NFC can expand some combining characters; normalization must stay bounded.
+	PERFORM standardize_address(
+		'scanner_lex', 'scanner_gaz', 'scanner_rules',
+		'1 A' || U&'\0344', '');
 END
 $scanner_bounds$;
 

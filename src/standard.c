@@ -87,7 +87,8 @@ static int _Is_Alphabetic_Character_(const char *character)
 		/* PostgreSQL 14 has no locale-independent Unicode category API.
 		 * Recognize the Latin ranges used by the BR data before consulting
 		 * LC_CTYPE, so Portuguese input works even in a C-locale database. */
-		if (((codepoint >= 0x00C0) && (codepoint <= 0x00D6)) ||
+		if ((codepoint == 0x00AA) || (codepoint == 0x00BA) ||
+		    ((codepoint >= 0x00C0) && (codepoint <= 0x00D6)) ||
 		    ((codepoint >= 0x00D8) && (codepoint <= 0x00DE)) ||
 		    ((codepoint >= 0x00E0) && (codepoint <= 0x00F6)) ||
 		    ((codepoint >= 0x00F8) && (codepoint <= 0x00FE)))

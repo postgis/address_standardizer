@@ -133,5 +133,10 @@ SELECT '#br24' AS ticket, city, state FROM standardize_address(
 ticket|city|state
 #br24|GOVERNADOR DIX-SEPT ROSADO|RN
 (1 row)
+SELECT '#br25' AS ticket, house_num, pretype, name, sufdir, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta Nº 100', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|sufdir|unit
+#br25|100|RUA|AUGUSTA||
+(1 row)
 \pset format aligned
 -- End Brazilian address standardizer regression tests
