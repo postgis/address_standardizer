@@ -347,6 +347,15 @@ class TestImportCnefe(unittest.TestCase):
         self.assertIn("healthcheck:", compose_content)
         self.assertIn("pg_isready", compose_content)
 
+    def test_ci_runs_cnefe_tooling_tests(self):
+        """The CNEFE importer tests must run in every GitHub Actions matrix job."""
+        workflow_path = os.path.join(REPO_ROOT, ".github", "workflows", "ci.yml")
+        with open(workflow_path, "r", encoding="utf-8") as f:
+            workflow_content = f.read()
+
+        self.assertIn("name: 'Test CNEFE tooling'", workflow_content)
+        self.assertIn("run: python3 test/test_tools.py -q", workflow_content)
+
     def test_existing_cluster_upgrade_guidance(self):
         """Verify that docker/init.sql and tools/README.md document the upgrade procedure and POSTGRES_DATA_DIR reset."""
         init_sql_path = os.path.join(REPO_ROOT, "docker", "init.sql")
@@ -442,8 +451,8 @@ class TestImportCnefe(unittest.TestCase):
             if os.path.exists(zip_path):
                 os.remove(zip_path)
 
-    def test_atomic_swap_inserts_geometry_before_commit(self):
-        """A reader must never see freshly swapped rows without their geometry."""
+    def test_atomic_swap_guards_partial_import_after_lock(self):
+        """The same-UF lock must cover the final partial-import check and swap."""
         csv_data = (
             "COD_MUNICIPIO;NOM_SEGLOGR;LATITUDE;LONGITUDE\n"
             "3550308;AUGUSTA;-23.5532;-46.6521\n"
@@ -462,7 +471,7 @@ class TestImportCnefe(unittest.TestCase):
                  patch("subprocess.Popen", return_value=mock_proc):
                 mock_run.return_value = MagicMock(stdout="0\n")
                 import_cnefe.import_cnefe_to_postgres(
-                    zip_path, "SP", muni_map={3550308: ("SAO PAULO", "SP")}
+                    zip_path, "SP", limit=1, muni_map={3550308: ("SAO PAULO", "SP")}
                 )
 
             sql_commands = [" ".join(call.args[0]) for call in mock_run.call_args_list if call.args]
@@ -470,7 +479,9 @@ class TestImportCnefe(unittest.TestCase):
             self.assertIn("latitude, longitude, geom", swap_sql)
             self.assertIn("ST_SetSRID(ST_Point(longitude, latitude), 4326)", swap_sql)
             self.assertIn("pg_advisory_xact_lock", swap_sql)
-            self.assertLess(swap_sql.index("pg_advisory_xact_lock"), swap_sql.index("DELETE FROM cnefe_enderecos"))
+            self.assertIn("Substituição parcial com --limit foi rejeitada", swap_sql)
+            self.assertLess(swap_sql.index("pg_advisory_xact_lock"), swap_sql.index("DO $$"))
+            self.assertLess(swap_sql.index("DO $$"), swap_sql.index("DELETE FROM cnefe_enderecos"))
             self.assertIn("COMMIT", swap_sql)
             self.assertFalse(any("UPDATE cnefe_enderecos" in sql for sql in sql_commands))
         finally:

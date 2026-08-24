@@ -395,9 +395,21 @@ def import_cnefe_to_postgres(
             return 0
 
         print(f"\nAplicando transação atômica para substituir dados da UF: {uf_upper}...")
+        partial_limit_guard_sql = ""
+        if limit is not None:
+            partial_limit_guard_sql = f"""
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM cnefe_enderecos WHERE uf = '{uf_upper}') THEN
+                    RAISE EXCEPTION 'Substituição parcial com --limit foi rejeitada para a UF {uf_upper}';
+                END IF;
+            END
+            $$;
+            """
         atomic_swap_sql = f"""
         BEGIN;
         SELECT pg_advisory_xact_lock(hashtext('cnefe_enderecos:{uf_upper}'));
+        {partial_limit_guard_sql}
         DELETE FROM cnefe_enderecos WHERE uf = '{uf_upper}';
         INSERT INTO cnefe_enderecos (
             cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro,
