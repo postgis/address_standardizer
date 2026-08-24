@@ -104,13 +104,13 @@ response format types :
 #define BACK_SLASH 0x5c
 #define FORE_SLASH '/'
 #define IS_DOT(CH) ( CH == '.' )
-#define IS_DIR_SEP(CH) ( CH == global_path_separator )
+#define PAGC_IS_DIR_SEP(CH) ( CH == global_path_separator )
 #define IS_COLON(CH) ( CH == ':' )
 #define NOT_PATH_DELIMITOR(CH) \
    ( CH != global_path_separator ) && \
    ( !IS_COLON(CH) )
 #define IS_PATH_DELIMITOR(CH) \
-   ( IS_DIR_SEP(CH) || \
+   ( PAGC_IS_DIR_SEP(CH) || \
    IS_COLON(CH) )
 #define COMMA_APPEND_WITH_LEN( D , S , L ) \
    char_append( "," , D , S , L )

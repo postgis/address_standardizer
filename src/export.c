@@ -7,6 +7,7 @@ into strings of text (in __standard_fields__).
 Prototype 7H08 (This file was written by Walter Sinclair).
 
 Copyright (c) 2009 Walter Bruce Sinclair
+Copyright (c) 2026 Darafei Praliaskouski <me@komzpa.net>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -28,8 +29,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #define ORDER_DISPLACEMENT 2
 
 /* -- local prototypes -- */
-static void _copy_standard_( STAND_PARAM * , SYMB , int , int  ) ;
+static void _copy_standard_( STAND_PARAM * , SYMB , int , int , int  ) ;
 static void _scan_target_( STAND_PARAM * , SYMB , int  ) ;
+static void _scan_unit_target_( STAND_PARAM * , int  ) ;
 static char *_get_standard_( STAND_PARAM * , int , int ) ;
 static char *_get_definition_text_( STAND_PARAM * , int ) ;
 
@@ -187,8 +189,7 @@ void stuff_fields( STAND_PARAM *__stand_param__ )
 	/*-- These two fields have two tokens for each field --*/
 	_scan_target_( __stand_param__ , BOXH, NEEDHEAD ) ;
 	_scan_target_( __stand_param__ , BOXT, NEEDHEAD ) ;
-	_scan_target_( __stand_param__ , UNITH, NEEDHEAD+1 ) ;
-	_scan_target_( __stand_param__ , UNITT, NEEDHEAD+1 ) ;
+	_scan_unit_target_( __stand_param__ , NEEDHEAD+1 ) ;
 }
 
 //#ifndef BUILD_API
@@ -381,7 +382,42 @@ static void _scan_target_(STAND_PARAM *__stand_param__,SYMB sym , int dest)
 	{
 		if (__output_syms__[i] == sym)
 		{
-			_copy_standard_(__stand_param__,sym,dest,i) ;
+			_copy_standard_(__stand_param__,sym,dest,i,0) ;
+		}
+	}
+}
+
+/*-----------------------------------------
+export.c (_scan_unit_target_ )
+-- calls export.c (_copy_standard_)
+-------------------------------------------*/
+static void _scan_unit_target_(STAND_PARAM *__stand_param__, int dest)
+{
+	int i ;
+	int n = __stand_param__->LexNum ;
+	int has_unit_header = 0 ;
+	SYMB *__output_syms__ = __stand_param__->best_output ;
+
+	/* Unit headers and identifiers share one field.  Scan both symbols in
+	 * lexical order so repeated pairs stay associated in the output.  Detect
+	 * headers first because an identifier can precede its header, as in
+	 * "REAR APARTMENT 2". */
+	for (i = FIRST_LEX_POS; i < n; i++)
+	{
+		if (__output_syms__[i] == UNITH)
+		{
+			has_unit_header = 1 ;
+			break ;
+		}
+	}
+
+	for (i = FIRST_LEX_POS; i < n; i++)
+	{
+		SYMB sym = __output_syms__[i] ;
+
+		if ((sym == UNITH) || (sym == UNITT))
+		{
+			_copy_standard_(__stand_param__,sym,dest,i,has_unit_header) ;
 		}
 	}
 }
@@ -393,7 +429,7 @@ export.c (_copy_standard_)
 strlen, strcpy
 uses macro SPACE_APPEND_WITH_LEN
 -------------------------------------------*/
-static void _copy_standard_( STAND_PARAM *__stand_param__ , SYMB output_sym , int fld , int lex_pos )
+static void _copy_standard_( STAND_PARAM *__stand_param__ , SYMB output_sym , int fld , int lex_pos , int has_unit_header )
 {
 
 	/*-- Retrieve the standardized string --*/
@@ -406,9 +442,35 @@ static void _copy_standard_( STAND_PARAM *__stand_param__ , SYMB output_sym , in
 	}
 	if ( *__dest_buf__ != SENTINEL )
 	{
-		SPACE_APPEND_WITH_LEN( __dest_buf__ , __stan_str__ , MAXFLDLEN ) ;
+		/* Postal pieces and route identifiers use their canonical separators;
+		 * all other repeated output symbols remain space-delimited. */
+		if (( output_sym == POSTAL )
+			&& ( lex_pos > FIRST_LEX_POS )
+			&& ( __stand_param__->best_defs[lex_pos - 1] != NULL )
+			&& ( __stand_param__->best_defs[lex_pos] != NULL )
+			&& ( __stand_param__->best_defs[lex_pos - 1]->Type == PCH )
+			&& ( __stand_param__->best_defs[lex_pos]->Type == PCT ))
+		{
+			SPACE_APPEND_WITH_LEN( __dest_buf__ , __stan_str__ , MAXFLDLEN ) ;
+		}
+		else if ( output_sym == POSTAL )
+		{
+			char_append( "-" , __dest_buf__ , __stan_str__ , MAXFLDLEN ) ;
+		}
+		else if (( output_sym == STREET )
+			&& ( lex_pos > FIRST_LEX_POS )
+			&& ( __stand_param__->best_output[lex_pos - 1] == STREET )
+			&& ( __stand_param__->best_defs[lex_pos - 1] != NULL )
+			&& ( __stand_param__->best_defs[lex_pos - 1]->Type == ROAD ))
+		{
+			char_append( "-" , __dest_buf__ , __stan_str__ , MAXFLDLEN ) ;
+		}
+		else
+		{
+			SPACE_APPEND_WITH_LEN( __dest_buf__ , __stan_str__ , MAXFLDLEN ) ;
+		}
 	}
-	else if ( output_sym == UNITT )
+	else if (( output_sym == UNITT ) && !has_unit_header)
 	{
 		/*-- If the unit id type is missing, one needs to be provided.
          This might result in a mismatch, when the type is implicit
@@ -429,4 +491,3 @@ static void _copy_standard_( STAND_PARAM *__stand_param__ , SYMB output_sym , in
 		strcpy( __dest_buf__ , __stan_str__ ) ;
 	}
 }
-

@@ -4,6 +4,11 @@
 
 2026/xx/xx
 
+### New Features
+
+- GH-11, Add `address_standardizer_data_br` with Brazilian lexicon,
+  gazetteer, and address rules (Ruy França, Darafei Praliaskouski)
+
 ### Bug Fixes
 
 - Reject oversized rule strings before parsing can overrun the

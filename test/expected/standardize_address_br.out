@@ -1,0 +1,257 @@
+-- Brazilian address standardizer regression tests
+SELECT '#br1' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Augusta, 100', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype |  name   | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+---------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br1   |          | 100       |        |      | RUA     | AUGUSTA |         |        |            |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+SELECT '#br2' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Avenida Paulista, 1000 Apto 101', 'Sao Paulo, SP, 01310 100');
+ ticket | building | house_num | predir | qual | pretype |   name   | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode  | box |   unit   
+--------+----------+-----------+--------+------+---------+----------+---------+--------+------------+-------+-----------+-------+---------+-----------+-----+----------
+ #br2   |          | 1000      |        |      | AVENIDA | PAULISTA |         |        |            |       | SAO PAULO | SP    |         | 01310-100 |     | APTO 101
+(1 row)
+
+SELECT '#br3' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rodovia dos Imigrantes, Km 50', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype |      name      | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+----------------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br3   |          | 50        |        |      | RODOVIA | DOS IMIGRANTES |         |        | KM         |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+SELECT '#br4' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'SQS 308 Bloco B Apto 101', 'Brasilia, DF');
+ ticket | building | house_num | predir | qual |     pretype     | name | suftype | sufdir | ruralroute | extra |   city   | state | country | postcode | box |       unit       
+--------+----------+-----------+--------+------+-----------------+------+---------+--------+------------+-------+----------+-------+---------+----------+-----+------------------
+ #br4   |          |           |        |      | SUPERQUADRA SUL | 308  |         |        |            |       | BRASILIA | DF    |         |          |     | BLOCO B APTO 101
+(1 row)
+
+SELECT '#br5' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Quadra 10 Lote 5', 'Goiania, GO');
+ ticket | building | house_num | predir | qual | pretype | name | suftype | sufdir | ruralroute | extra |  city   | state | country | postcode | box |  unit  
+--------+----------+-----------+--------+------+---------+------+---------+--------+------------+-------+---------+-------+---------+----------+-----+--------
+ #br5   |          |           |        |      | QUADRA  | 10   |         |        |            |       | GOIANIA | GO    |         |          |     | LOTE 5
+(1 row)
+
+SELECT '#br6' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Açucena, 100', 'São Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype |  name   | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+---------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br6   |          | 100       |        |      | RUA     | AÇUCENA |         |        |            |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+SELECT '#br7' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Augusta, 100A', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype |  name   | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+---------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br7   |          | 100 A     |        |      | RUA     | AUGUSTA |         |        |            |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+SELECT '#br8' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Avenida Paulista, 1000 Bloco B', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype |   name   | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box |  unit   
+--------+----------+-----------+--------+------+---------+----------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+---------
+ #br8   |          | 1000      |        |      | AVENIDA | PAULISTA |         |        |            |       | SAO PAULO | SP    |         |          |     | BLOCO B
+(1 row)
+
+SELECT '#br9' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Augusta, 100', 'Sao Paulo, SP, Brazil');
+ ticket | building | house_num | predir | qual | pretype |  name   | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+---------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br9   |          | 100       |        |      | RUA     | AUGUSTA |         |        |            |       | SAO PAULO | SP    | BRASIL  |          |     | 
+(1 row)
+
+SELECT '#br10' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Augusta, 100', 'Sao Paulo, SP, 01310-100, Brasil');
+ ticket | building | house_num | predir | qual | pretype |  name   | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode  | box | unit 
+--------+----------+-----------+--------+------+---------+---------+---------+--------+------------+-------+-----------+-------+---------+-----------+-----+------
+ #br10  |          | 100       |        |      | RUA     | AUGUSTA |         |        |            |       | SAO PAULO | SP    | BRASIL  | 01310-100 |     | 
+(1 row)
+
+SELECT '#br11' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Norte, 100', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype | name  | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+-------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br11  |          | 100       |        |      | RUA     | NORTE |         |        |            |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+SELECT '#br12' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rodovia Presidente Castelo Branco Km 30', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype |           name            | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+---------------------------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br12  |          | 30        |        |      | RODOVIA | PRESIDENTE CASTELO BRANCO |         |        | KM         |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+SELECT '#br13' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Augusta Numero 100', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype |  name   | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+---------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br13  |          | 100       |        |      | RUA     | AUGUSTA |         |        |            |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+SELECT '#br14' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Estrada dos Romeiros Km 30', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype |     name     | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+--------------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br14  |          | 30        |        |      | ESTRADA | DOS ROMEIROS |         |        | KM         |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+SELECT '#br15' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Augusta No 100', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype |  name   | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+---------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br15  |          | 100       |        |      | RUA     | AUGUSTA |         |        |            |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+SELECT '#br16' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Noroeste 100', 'Sao Paulo, SP');
+ ticket | building | house_num | predir | qual | pretype |   name   | suftype | sufdir | ruralroute | extra |   city    | state | country | postcode | box | unit 
+--------+----------+-----------+--------+------+---------+----------+---------+--------+------------+-------+-----------+-------+---------+----------+-----+------
+ #br16  |          | 100       |        |      | RUA     | NOROESTE |         |        |            |       | SAO PAULO | SP    |         |          |     | 
+(1 row)
+
+\pset format unaligned
+SELECT '#br17' AS ticket, house_num, pretype, name FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Açucena – 100', 'São Paulo, SP');
+ticket|house_num|pretype|name
+#br17|100|RUA|AÇUCENA
+(1 row)
+SELECT '#br18' AS ticket, house_num, pretype, name FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Açucena 100', 'São Paulo, SP');
+ticket|house_num|pretype|name
+#br18|100|RUA|AÇUCENA
+(1 row)
+SELECT '#br19' AS ticket, house_num, pretype, name FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Acucena 100', 'Sao Paulo, SP');
+ticket|house_num|pretype|name
+#br19|100|RUA|ACUCENA
+(1 row)
+SELECT '#br20' AS ticket, house_num, pretype, name FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Açucena 100', 'São Paulo, SP');
+ticket|house_num|pretype|name
+#br20|100|RUA|AÇUCENA
+(1 row)
+SELECT '#br21' AS ticket, house_num, pretype, name, city FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules',
+    U&'Rua Ac\0327ucena 100', U&'Sa\0303o Paulo, SP');
+ticket|house_num|pretype|name|city
+#br21|100|RUA|AÇUCENA|SAO PAULO
+(1 row)
+SELECT '#br22' AS ticket, house_num, pretype, name FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua 25 de Março 100', 'Sao Paulo, SP');
+ticket|house_num|pretype|name
+#br22|100|RUA|25 DE MARÇO
+(1 row)
+SELECT '#br23' AS ticket, house_num, pretype, name FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Avenida 9 de Julho 200', 'Sao Paulo, SP');
+ticket|house_num|pretype|name
+#br23|200|AVENIDA|9 DE JULHO
+(1 row)
+SELECT '#br24' AS ticket, city, state FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100', 'Governador Dix-Sept Rosado, RN');
+ticket|city|state
+#br24|GOVERNADOR DIX-SEPT ROSADO|RN
+(1 row)
+SELECT '#br25' AS ticket, house_num, pretype, name, sufdir, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta Nº 100', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|sufdir|unit
+#br25|100|RUA|AUGUSTA||
+(1 row)
+SELECT '#br26' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100 Apto 101A', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|unit
+#br26|100|RUA|AUGUSTA|APTO 101A
+(1 row)
+SELECT '#br27' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100 Apto 101 A', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|unit
+#br27|100|RUA|AUGUSTA|APTO 101 A
+(1 row)
+SELECT '#br28' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100 Fundos', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|unit
+#br28|100|RUA|AUGUSTA|FUNDOS
+(1 row)
+SELECT '#br29' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100 Frente', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|unit
+#br29|100|RUA|AUGUSTA|FRENTE
+(1 row)
+SELECT '#br30' AS ticket, state, postcode FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100', 'SP, 01310');
+ticket|state|postcode
+#br30|SP|01310
+(1 row)
+SELECT '#br31' AS ticket, state, postcode FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100', 'SP, 01310-100');
+ticket|state|postcode
+#br31|SP|01310-100
+(1 row)
+SELECT '#br32' AS ticket, house_num, pretype, name, city FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua João & Maria 100', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|city
+#br32|100|RUA|JOÃO E MARIA|SAO PAULO
+(1 row)
+SELECT '#br33' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100 Bloco 2 A Apto 101B', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|unit
+#br33|100|RUA|AUGUSTA|BLOCO 2 A APTO 101B
+(1 row)
+SELECT '#br34' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100 Bloco B2 Apto 101 A', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|unit
+#br34|100|RUA|AUGUSTA|BLOCO B2 APTO 101 A
+(1 row)
+SELECT '#br35' AS ticket, house_num, pretype, name, ruralroute FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rodovia BR-101 Km 150', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|ruralroute
+#br35|150|RODOVIA|BR-101|KM
+(1 row)
+SELECT '#br36' AS ticket, house_num, pretype, name, ruralroute FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rodovia BR-101', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|ruralroute
+#br36||RODOVIA|BR-101|
+(1 row)
+SELECT '#br37' AS ticket, house_num, pretype, name, ruralroute FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rodovia Anhanguera 100', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|ruralroute
+#br37|100|RODOVIA|ANHANGUERA|
+(1 row)
+SELECT '#br38' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Casa do Ator 100', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|unit
+#br38|100|RUA|CASA DO ATOR|
+(1 row)
+SELECT '#br39' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100 Casa 2', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|unit
+#br39|100|RUA|AUGUSTA|CASA 2
+(1 row)
+SELECT '#br40' AS ticket, house_num, pretype, name, ruralroute FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rodovia BR 101 Km 150', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|ruralroute
+#br40|150|RODOVIA|BR-101|KM
+(1 row)
+SELECT '#br41' AS ticket, house_num, pretype, name, ruralroute FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rodovia BR 101', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|ruralroute
+#br41||RODOVIA|BR-101|
+(1 row)
+SELECT '#br42' AS ticket, house_num, pretype, name, ruralroute FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rodovia SP-330 Km 100', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|ruralroute
+#br42|100|RODOVIA|SP-330|KM
+(1 row)
+SELECT '#br43' AS ticket, house_num, pretype, name, ruralroute FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rodovia SP 330', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|ruralroute
+#br43||RODOVIA|SP-330|
+(1 row)
+SELECT '#br44' AS ticket, house_num, pretype, name FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua A 100', 'Sao Paulo, SP');
+ticket|house_num|pretype|name
+#br44|100|RUA|A
+(1 row)
+SELECT '#br45' AS ticket, house_num, pretype, name FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua XV de Novembro 100', 'Sao Paulo, SP');
+ticket|house_num|pretype|name
+#br45|100|RUA|XV DE NOVEMBRO
+(1 row)
+SELECT '#br46' AS ticket, house_num, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Paulista 1000 Apto 101', 'Sao Paulo, SP');
+ticket|house_num|name|unit
+#br46|1000|PAULISTA|APTO 101
+(1 row)
+SELECT '#br47' AS ticket, house_num, pretype, name, sufdir FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta N. 100', 'Sao Paulo, SP');
+ticket|house_num|pretype|name|sufdir
+#br47|100|RUA|AUGUSTA|
+(1 row)
+SELECT '#br48' AS ticket, city, state FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100', 'Dias d’Ávila, BA');
+ticket|city|state
+#br48|DIAS D'AVILA|BA
+(1 row)
+\pset format aligned
+-- End Brazilian address standardizer regression tests

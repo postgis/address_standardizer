@@ -24,6 +24,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #include <string.h>
 #include <ctype.h>
 #include <unistd.h>
+#ifndef PAGC_STANDALONE
+#include "postgres.h"
+#include "catalog/pg_collation_d.h"
+#include "common/unicode_norm.h"
+#include "mb/pg_wchar.h"
+#include "utils/formatting.h"
+#endif
 #include "pagc_common.h"
 #include "pagc_tools.h"
 
@@ -304,12 +311,108 @@ void combine_path_file( char global_path_separator ,
 void upper_case( char *d ,
                  const char *s ) {
    /* -- make an uppercase copy in d of string in s -- */
+#ifdef PAGC_STANDALONE
    for ( ;
          *s != SENTINEL ;
          s++ ) {
-      *d++ = ( islower( *s )? toupper( *s ) : *s ) ;
+      *d++ = ( islower( (unsigned char) *s )? toupper( (unsigned char) *s ) : *s ) ;
    }
    BLANK_STRING(d) ;
+#else
+   if (GetDatabaseEncoding() == PG_UTF8) {
+      char *end = d + MAXSTRLEN - 1 ;
+      int source_length = strlen(s) ;
+      pg_wchar *wide = palloc((source_length + 1) * sizeof(pg_wchar)) ;
+      pg_wchar *normalized ;
+      char *nfc ;
+      int wide_length ;
+      int normalized_length ;
+      int nfc_length ;
+      Size nfc_capacity ;
+
+      /* The BR generator uses Python's locale-independent upper().  Keep the
+       * corresponding ASCII and Portuguese Latin-1 mappings independent of
+       * the database LC_CTYPE so UTF-8 data also works in C-locale databases. */
+      wide_length = pg_mb2wchar_with_len(s, wide, source_length) ;
+      wide[wide_length] = 0 ;
+      normalized = unicode_normalize(UNICODE_NFC, wide) ;
+      for (normalized_length = 0 ; normalized[normalized_length] != 0 ;
+           normalized_length++)
+         ;
+      nfc_capacity = (Size) normalized_length * MAX_MULTIBYTE_CHAR_LEN + 1 ;
+      nfc = palloc(nfc_capacity) ;
+      nfc_length = pg_wchar2mb_with_len(normalized, nfc, normalized_length) ;
+      nfc[nfc_length] = SENTINEL ;
+      if (nfc_length >= MAXSTRLEN) {
+         ereport(ERROR,
+                 (errmsg("normalized token exceeds maximum length"))) ;
+      }
+      s = nfc ;
+      while ((*s != SENTINEL) && (d < end)) {
+         unsigned char first = (unsigned char) s[0] ;
+
+         if ((first >= 'a') && (first <= 'z')) {
+            *d++ = (char) (first - ('a' - 'A')) ;
+            s++ ;
+         }
+         else if ((first == 0xC3) && (s[1] != SENTINEL) &&
+                  ((((unsigned char) s[1] >= 0xA0) &&
+                    ((unsigned char) s[1] <= 0xB6) &&
+                    ((unsigned char) s[1] != 0xB7)) ||
+                   (((unsigned char) s[1] >= 0xB8) &&
+                    ((unsigned char) s[1] <= 0xBE)))) {
+            if (d + 1 >= end) {
+               break ;
+            }
+            *d++ = (char) 0xC3 ;
+            *d++ = (char) ((unsigned char) s[1] - 0x20) ;
+            s += 2 ;
+         }
+         else {
+            int character_length = pg_mblen_unbounded(s) ;
+
+            if (d + character_length > end) {
+               break ;
+            }
+            memcpy(d, s, character_length) ;
+            d += character_length ;
+            s += character_length ;
+         }
+      }
+      BLANK_STRING(d) ;
+      pfree(nfc) ;
+      pfree(normalized) ;
+      pfree(wide) ;
+   }
+   else if (GetDatabaseEncoding() == PG_LATIN1) {
+      char *end = d + MAXSTRLEN - 1 ;
+
+      while ((*s != SENTINEL) && (d < end)) {
+         unsigned char byte = (unsigned char) *s++ ;
+
+         if ((byte >= 'a') && (byte <= 'z')) {
+            byte -= 'a' - 'A' ;
+         }
+         else if ((((byte >= 0xE0) && (byte <= 0xF6)) && (byte != 0xF7)) ||
+                  ((byte >= 0xF8) && (byte <= 0xFE))) {
+            byte -= 0x20 ;
+         }
+         *d++ = (char) byte ;
+      }
+      BLANK_STRING(d) ;
+   }
+   else {
+      char *upper;
+
+      upper = str_toupper(s, strlen(s), DEFAULT_COLLATION_OID);
+      if (strlen(upper) >= MAXSTRLEN) {
+         ereport(ERROR,
+                 (errmsg("uppercased token exceeds maximum length"))) ;
+      }
+      strlcpy(d, upper, MAXSTRLEN);
+      pfree(upper);
+   }
+#endif
 }
 
 /* 2010-10-22 : new routine */
@@ -437,5 +540,3 @@ static void conform_directory_separator( char * path_name ) {
 }
 /* ..... END OF IFDEF MSYS_POSIX ..... */
 #endif
-
-

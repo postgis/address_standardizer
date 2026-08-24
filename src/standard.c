@@ -27,6 +27,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <wchar.h>
+#include <wctype.h>
+#ifndef PAGC_STANDALONE
+#include "mb/pg_wchar.h"
+#include "tsearch/ts_locale.h"
+#endif
 #include "pagc_api.h"
 #ifdef BUILD_API
 #include "pagc_std_api.h"
@@ -39,6 +45,145 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 static int _Close_Stand_Field_(STAND_PARAM *) ;
 static int _Scan_String_(STAND_PARAM *, char *) ;
 static char * _Scan_Next_(STAND_PARAM *, char *) ;
+
+static int _Character_Length_(const char *character)
+{
+#ifndef PAGC_STANDALONE
+	return pg_mblen_unbounded(character) ;
+#else
+	mbstate_t state ;
+	size_t length ;
+	wchar_t wide_character ;
+
+	memset(&state, 0, sizeof(state)) ;
+	length = mbrtowc(&wide_character, character, MB_CUR_MAX, &state) ;
+	if ((length == (size_t) -1) || (length == (size_t) -2) || (length == 0))
+	{
+		return 1 ;
+	}
+	return (int) length ;
+#endif
+}
+
+static int _Is_Alphabetic_Character_(const char *character)
+{
+	unsigned char first_byte = (unsigned char) *character ;
+
+	if (first_byte < 0x80)
+	{
+		return isalpha(first_byte) ;
+	}
+#ifndef PAGC_STANDALONE
+	if (GetDatabaseEncoding() == PG_LATIN1)
+	{
+		/* Keep the Portuguese subset used by the BR data independent of
+		 * LC_CTYPE in single-byte LATIN1 databases. */
+		return (first_byte == 0xAA) || (first_byte == 0xBA) ||
+		       ((first_byte >= 0xC0) && (first_byte <= 0xD6)) ||
+		       ((first_byte >= 0xD8) && (first_byte <= 0xDE)) ||
+		       ((first_byte >= 0xE0) && (first_byte <= 0xF6)) ||
+		       ((first_byte >= 0xF8) && (first_byte <= 0xFE)) ;
+	}
+	if (GetDatabaseEncoding() == PG_UTF8)
+	{
+		int length = pg_utf_mblen((const unsigned char *) character) ;
+		pg_wchar codepoint ;
+
+		if (!pg_utf8_islegal((const unsigned char *) character, length))
+		{
+			return FALSE ;
+		}
+		codepoint = utf8_to_unicode((const unsigned char *) character) ;
+		/* PostgreSQL 14 has no locale-independent Unicode category API.
+		 * Recognize the Latin ranges used by the BR data before consulting
+		 * LC_CTYPE, so Portuguese input works even in a C-locale database. */
+		if ((codepoint == 0x00AA) || (codepoint == 0x00BA) ||
+		    ((codepoint >= 0x00C0) && (codepoint <= 0x00D6)) ||
+		    ((codepoint >= 0x00D8) && (codepoint <= 0x00DE)) ||
+		    ((codepoint >= 0x00E0) && (codepoint <= 0x00F6)) ||
+		    ((codepoint >= 0x00F8) && (codepoint <= 0x00FE)))
+		{
+			return TRUE ;
+		}
+	}
+	/* PostgreSQL classifies a complete character in the database encoding and
+	 * locale for scripts not covered by the portable Latin fast path. */
+	return t_isalpha_unbounded(character) ;
+#else
+	{
+		mbstate_t state ;
+		size_t length ;
+		wchar_t wide_character ;
+
+		memset(&state, 0, sizeof(state)) ;
+		length = mbrtowc(&wide_character, character, MB_CUR_MAX, &state) ;
+		return (length != (size_t) -1) && (length != (size_t) -2) &&
+		       (length != 0) && iswalpha(wide_character) ;
+	}
+#endif
+}
+
+/* Treat the Unicode right single quotation mark like the ASCII apostrophe
+ * used by the lexicon (for example, Dias d’Ávila). */
+static int _Is_Apostrophe_(const char *character)
+{
+	if ((unsigned char) character[0] == '\'' )
+		return TRUE ;
+#ifndef PAGC_STANDALONE
+	return GetDatabaseEncoding() == PG_UTF8 &&
+	       (unsigned char) character[0] == 0xE2 &&
+	       (unsigned char) character[1] == 0x80 &&
+	       (unsigned char) character[2] == 0x99 ;
+#else
+	return FALSE ;
+#endif
+}
+
+static int _Is_Combining_Mark_(const char *character)
+{
+	unsigned char first_byte = (unsigned char) *character ;
+	unsigned int codepoint ;
+
+	if (first_byte < 0x80)
+	{
+		return FALSE ;
+	}
+#ifndef PAGC_STANDALONE
+	if (GetDatabaseEncoding() != PG_UTF8)
+	{
+		return FALSE ;
+	}
+	{
+		int length = pg_utf_mblen((const unsigned char *) character) ;
+
+		if (!pg_utf8_islegal((const unsigned char *) character, length))
+		{
+			return FALSE ;
+		}
+	}
+	codepoint = utf8_to_unicode((const unsigned char *) character) ;
+#else
+	{
+		mbstate_t state ;
+		size_t length ;
+		wchar_t wide_character ;
+
+		memset(&state, 0, sizeof(state)) ;
+		length = mbrtowc(&wide_character, character, MB_CUR_MAX, &state) ;
+		if ((length == (size_t) -1) || (length == (size_t) -2) ||
+		    (length == 0))
+		{
+			return FALSE ;
+		}
+		codepoint = (unsigned int) wide_character ;
+	}
+#endif
+	return ((codepoint >= 0x0300) && (codepoint <= 0x036F)) ||
+	       ((codepoint >= 0x1AB0) && (codepoint <= 0x1AFF)) ||
+	       ((codepoint >= 0x1DC0) && (codepoint <= 0x1DFF)) ||
+	       ((codepoint >= 0x20D0) && (codepoint <= 0x20FF)) ||
+	       ((codepoint >= 0xFE20) && (codepoint <= 0xFE2F)) ;
+}
 
 static char __spacer__[] = " \\-.)}>_" ;
 
@@ -186,12 +331,12 @@ static char * _Scan_Next_( STAND_PARAM *__stand_param__,char * __in_ptr__)
 		return (__src__ + 1) ;
 	}
 	/*-- <remarks> Numeric sequences : ordinals, fractions and numbers </remarks> --*/
-	if (isdigit(a))
+	if (isdigit((unsigned char) a))
 	{
         char b ;
         char last_digit ;
 
-		COLLECT_WHILE(isdigit(a)) ;
+		COLLECT_WHILE(isdigit((unsigned char) a)) ;
 		/*-- <remarks> Get a character of lookahead and one of lookbehind </remarks> --*/
 		b = *(__src__ + 1 ) ;
 		last_digit = *(__dest__ - 1 ) ; /*-- last digit collected --*/
@@ -201,7 +346,7 @@ static char * _Scan_Next_( STAND_PARAM *__stand_param__,char * __in_ptr__)
 			/*-- <remarks> Fractions </remarks> --*/
 		case '/' :
 			/*-- <remarks> Collect the rest of the fraction </remarks> --*/
-			if (isdigit(b))
+			if (isdigit((unsigned char) b))
 			{
 				switch (b)
 				{
@@ -283,12 +428,45 @@ static char * _Scan_Next_( STAND_PARAM *__stand_param__,char * __in_ptr__)
 		RETURN_NEW_MORPH(DSINGLE) ;
 	}
 	/*-- <remarks> Alphabetic sequence </remarks> --*/
-	if ((isalpha(a)) || (a == '\'') || (a == '#'))
+	if (a == '#')
 	{
-		COLLECT_WHILE((isalpha(a)) || (a == '\'')) ;
+		ENSURE_SCAN_ROOM(1) ;
+		*__dest__++ = a ;
+		__src__++ ;
+		TERM_AND_LENGTH ;
+		RETURN_NEW_MORPH(DSINGLE) ;
+	}
+	if (_Is_Alphabetic_Character_(__src__) || _Is_Apostrophe_(__src__))
+	{
+		int character_count = 0 ;
+
+		while (_Is_Alphabetic_Character_(__src__) ||
+		       _Is_Combining_Mark_(__src__) ||
+		       _Is_Apostrophe_(__src__))
+		{
+			int is_apostrophe = _Is_Apostrophe_(__src__) ;
+			int is_combining_mark = _Is_Combining_Mark_(__src__) ;
+			int character_length = is_apostrophe ?
+			                       ((unsigned char) *__src__ == '\'' ? 1 : 3) :
+			                       _Character_Length_(__src__) ;
+
+			ENSURE_SCAN_ROOM(character_length) ;
+			if (is_apostrophe)
+				*__dest__++ = '\'' ;
+			else
+			{
+				memcpy(__dest__, __src__, character_length) ;
+				__dest__ += character_length ;
+			}
+			__src__ += character_length ;
+			if (!is_combining_mark)
+			{
+				character_count++ ;
+			}
+		}
 		TERM_AND_LENGTH ;
 		/*-- <remarks> Retain position </remarks> --*/
-		switch (n)
+		switch (character_count)
 		{
 		case 1 :
 			RETURN_NEW_MORPH(DSINGLE) ;
@@ -307,6 +485,15 @@ static char * _Scan_Next_( STAND_PARAM *__stand_param__,char * __in_ptr__)
 		                 strchr(__spacer__,a) != NULL) ;
 		set_term(__stand_param__,2,__scan_buf__) ;
 		/*-- <remarks> Retain position </remarks> --*/
+		return (__src__) ;
+	}
+	/* A non-ASCII non-letter is a complete separator, not a collection of
+	 * alphabetic bytes.  Advance over it once so punctuation such as an en dash
+	 * and spacing such as a non-breaking space cannot enter adjacent tokens. */
+	if ((unsigned char) a >= 0x80)
+	{
+		__src__ += _Character_Length_(__src__) ;
+		set_term(__stand_param__,2,__scan_buf__) ;
 		return (__src__) ;
 	}
 	/*-- <remarks> Ignore everything not specified. Point to next input char. </remarks> --*/

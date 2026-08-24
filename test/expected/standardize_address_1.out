@@ -70,6 +70,36 @@ SELECT '#2459b' AS ticket, * FROM standardize_address('us_lex', 'us_gaz', 'us_ru
  #2459b |          | 212       |        |      |         | 3    | AVENUE  | NORTH  |            |       | MINNEAPOLIS | MINNESOTA | US      | 55340-4  |     | 
 (1 row)
 
+SET statement_timeout = '2s';
+SELECT '#hash_unit' AS ticket, house_num, name, suftype, unit FROM standardize_address(
+    'us_lex', 'us_gaz', 'us_rules', '123 Main St #4', 'Boston, MA');
+   ticket   | house_num | name | suftype | unit 
+------------+-----------+------+---------+------
+ #hash_unit | 123       | MAIN | STREET  | # 4
+(1 row)
+
+SELECT '#hash_unit_attached' AS ticket, house_num, name, suftype, unit FROM standardize_address(
+    'us_lex', 'us_gaz', 'us_rules', '123 Main St#4', 'Boston, MA');
+       ticket        | house_num | name | suftype | unit 
+---------------------+-----------+------+---------+------
+ #hash_unit_attached | 123       | MAIN | STREET  | # 4
+(1 row)
+
+SELECT '#unit_order' AS ticket, house_num, name, suftype, unit FROM standardize_address(
+    'us_lex', 'us_gaz', 'us_rules', '123 Main St Rear Apt 2', 'Boston, MA');
+   ticket    | house_num | name | suftype |       unit       
+-------------+-----------+------+---------+------------------
+ #unit_order | 123       | MAIN | STREET  | REAR APARTMENT 2
+(1 row)
+
+SELECT '#ca_postal' AS ticket, postcode FROM standardize_address(
+    'us_lex', 'us_gaz', 'us_rules', '123 King St', 'Toronto, ON M5V 2T6');
+   ticket   | postcode 
+------------+----------
+ #ca_postal | M5V 2T6
+(1 row)
+
+RESET statement_timeout;
 DO $$
 BEGIN
 	PERFORM standardize_address('us_lex', 'us_gaz', 'us_rules', '   ');

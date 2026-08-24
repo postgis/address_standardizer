@@ -67,6 +67,30 @@ BEGIN
 	   OR standardized.name IS DISTINCT FROM 'MAIN' THEN
 		RAISE EXCEPTION 'scanner changed an address with trailing spaces';
 	END IF;
+
+	-- NFC can expand some combining characters; a fitting expansion survives.
+	standardized := standardize_address(
+		'scanner_lex', 'scanner_gaz', 'scanner_rules',
+		'1 ABC' || repeat(U&'\0344', 40), '');
+	IF standardized IS NULL
+	   OR standardized.house_num IS DISTINCT FROM '1'
+	   OR octet_length(standardized.name) IS DISTINCT FROM 163 THEN
+		RAISE EXCEPTION 'scanner changed a fitting NFC expansion';
+	END IF;
+
+	-- The same character can expand past MAXSTRLEN after scanning. Reject it
+	-- instead of silently truncating the normalized token.
+	BEGIN
+		PERFORM standardize_address(
+			'scanner_lex', 'scanner_gaz', 'scanner_rules',
+			'1 ABC' || repeat(U&'\0344', 100), '');
+		RAISE EXCEPTION 'scanner accepted an oversized NFC expansion';
+	EXCEPTION
+		WHEN OTHERS THEN
+			IF SQLERRM <> 'normalized token exceeds maximum length' THEN
+				RAISE;
+			END IF;
+	END;
 END
 $scanner_bounds$;
 
@@ -117,3 +141,4 @@ END
 $$;
 
 SELECT 'security_bounds_ok';
+-- End of security bounds regression.

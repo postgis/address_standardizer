@@ -1,0 +1,5 @@
+# address standardizer brasil dataset
+comment = 'Address Standardizer Brasil dataset'
+default_version = '3.7.1dev'
+relocatable = true
+encoding = 'UTF8'

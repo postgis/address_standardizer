@@ -548,6 +548,14 @@ parse_macro_input(const char *function_name, const char *raw_macro)
 					 : pstrdup(parsed_macro->address1);
 		parsed_macro->address1 = NULL;
 	}
+	else if (!has_macro_tail && parsed_macro->address1 && parsed_macro->address1[0] != '\0' && !parsed_macro->num &&
+		 !parsed_macro->street && !parsed_macro->street2)
+	{
+		parsed_macro->city = (parsed_macro->city && parsed_macro->city[0] != '\0')
+					 ? psprintf("%s, %s", parsed_macro->address1, parsed_macro->city)
+					 : pstrdup(parsed_macro->address1);
+		parsed_macro->address1 = NULL;
+	}
 
 	/*
 	 * State/postcode-only macros can still surface the state text in the city
