@@ -15,8 +15,10 @@ SELECT '#br13' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rul
 SELECT '#br14' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Estrada dos Romeiros Km 30', 'Sao Paulo, SP');
 SELECT '#br15' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Augusta No 100', 'Sao Paulo, SP');
 SELECT '#br16' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Noroeste 100', 'Sao Paulo, SP');
+\pset format unaligned
 SELECT '#br17' AS ticket, house_num, pretype, name FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Açucena – 100', 'São Paulo, SP');
 SELECT '#br18' AS ticket, house_num, pretype, name FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Açucena 100', 'São Paulo, SP');
 SELECT '#br19' AS ticket, house_num, pretype, name FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Acucena 100', 'Sao Paulo, SP');
 SELECT '#br20' AS ticket, house_num, pretype, name FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Açucena 100', 'São Paulo, SP');
+\pset format aligned
 -- End Brazilian address standardizer regression tests
