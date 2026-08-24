@@ -20,7 +20,7 @@ SELECT '#br3' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rule
 SELECT '#br4' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'SQS 308 Bloco B Apto 101', 'Brasilia, DF');
  ticket | building | house_num | predir | qual |     pretype     | name | suftype | sufdir | ruralroute | extra |   city   | state | country | postcode | box |       unit       
 --------+----------+-----------+--------+------+-----------------+------+---------+--------+------------+-------+----------+-------+---------+----------+-----+------------------
- #br4   |          |           |        |      | SUPERQUADRA SUL | 308  |         |        |            |       | BRASILIA | DF    |         |          |     | BLOCO APTO B 101
+ #br4   |          |           |        |      | SUPERQUADRA SUL | 308  |         |        |            |       | BRASILIA | DF    |         |          |     | BLOCO B APTO 101
 (1 row)
 
 SELECT '#br5' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Quadra 10 Lote 5', 'Goiania, GO');

@@ -27,6 +27,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <wchar.h>
+#include <wctype.h>
+#ifndef PAGC_STANDALONE
+#include "mb/pg_wchar.h"
+#include "tsearch/ts_locale.h"
+#endif
 #include "pagc_api.h"
 #ifdef BUILD_API
 #include "pagc_std_api.h"
@@ -40,14 +46,49 @@ static int _Close_Stand_Field_(STAND_PARAM *) ;
 static int _Scan_String_(STAND_PARAM *, char *) ;
 static char * _Scan_Next_(STAND_PARAM *, char *) ;
 
-/*
- * The scanner works with bytes, while upper_case() applies the database
- * collation to the completed token. Keep UTF-8 multibyte characters in that
- * token instead of dropping them between ASCII alphabetic runs.
- */
-static int _Is_Alphabetic_Byte_(unsigned char character)
+static int _Character_Length_(const char *character)
 {
-	return isalpha(character) || character >= 0x80;
+#ifndef PAGC_STANDALONE
+	return pg_mblen_unbounded(character) ;
+#else
+	mbstate_t state ;
+	size_t length ;
+	wchar_t wide_character ;
+
+	memset(&state, 0, sizeof(state)) ;
+	length = mbrtowc(&wide_character, character, MB_CUR_MAX, &state) ;
+	if ((length == (size_t) -1) || (length == (size_t) -2) || (length == 0))
+	{
+		return 1 ;
+	}
+	return (int) length ;
+#endif
+}
+
+static int _Is_Alphabetic_Character_(const char *character)
+{
+	unsigned char first_byte = (unsigned char) *character ;
+
+	if (first_byte < 0x80)
+	{
+		return isalpha(first_byte) ;
+	}
+#ifndef PAGC_STANDALONE
+	/* PostgreSQL classifies a complete character in the database encoding and
+	 * locale; testing each UTF-8 byte would also accept punctuation bytes. */
+	return t_isalpha_unbounded(character) ;
+#else
+	{
+		mbstate_t state ;
+		size_t length ;
+		wchar_t wide_character ;
+
+		memset(&state, 0, sizeof(state)) ;
+		length = mbrtowc(&wide_character, character, MB_CUR_MAX, &state) ;
+		return (length != (size_t) -1) && (length != (size_t) -2) &&
+		       (length != 0) && iswalpha(wide_character) ;
+	}
+#endif
 }
 
 static char __spacer__[] = " \\-.)}>_" ;
@@ -196,12 +237,12 @@ static char * _Scan_Next_( STAND_PARAM *__stand_param__,char * __in_ptr__)
 		return (__src__ + 1) ;
 	}
 	/*-- <remarks> Numeric sequences : ordinals, fractions and numbers </remarks> --*/
-	if (isdigit(a))
+	if (isdigit((unsigned char) a))
 	{
         char b ;
         char last_digit ;
 
-		COLLECT_WHILE(isdigit(a)) ;
+		COLLECT_WHILE(isdigit((unsigned char) a)) ;
 		/*-- <remarks> Get a character of lookahead and one of lookbehind </remarks> --*/
 		b = *(__src__ + 1 ) ;
 		last_digit = *(__dest__ - 1 ) ; /*-- last digit collected --*/
@@ -211,7 +252,7 @@ static char * _Scan_Next_( STAND_PARAM *__stand_param__,char * __in_ptr__)
 			/*-- <remarks> Fractions </remarks> --*/
 		case '/' :
 			/*-- <remarks> Collect the rest of the fraction </remarks> --*/
-			if (isdigit(b))
+			if (isdigit((unsigned char) b))
 			{
 				switch (b)
 				{
@@ -293,12 +334,24 @@ static char * _Scan_Next_( STAND_PARAM *__stand_param__,char * __in_ptr__)
 		RETURN_NEW_MORPH(DSINGLE) ;
 	}
 	/*-- <remarks> Alphabetic sequence </remarks> --*/
-	if (_Is_Alphabetic_Byte_((unsigned char) a) || (a == '\'') || (a == '#'))
+	if (_Is_Alphabetic_Character_(__src__) || (a == '\'') || (a == '#'))
 	{
-		COLLECT_WHILE(_Is_Alphabetic_Byte_((unsigned char) a) || (a == '\'')) ;
+		int character_count = 0 ;
+
+		while (_Is_Alphabetic_Character_(__src__) || (*__src__ == '\''))
+		{
+			int character_length = (*__src__ == '\'') ? 1 :
+			                       _Character_Length_(__src__) ;
+
+			ENSURE_SCAN_ROOM(character_length) ;
+			memcpy(__dest__, __src__, character_length) ;
+			__dest__ += character_length ;
+			__src__ += character_length ;
+			character_count++ ;
+		}
 		TERM_AND_LENGTH ;
 		/*-- <remarks> Retain position </remarks> --*/
-		switch (n)
+		switch (character_count)
 		{
 		case 1 :
 			RETURN_NEW_MORPH(DSINGLE) ;
@@ -317,6 +370,15 @@ static char * _Scan_Next_( STAND_PARAM *__stand_param__,char * __in_ptr__)
 		                 strchr(__spacer__,a) != NULL) ;
 		set_term(__stand_param__,2,__scan_buf__) ;
 		/*-- <remarks> Retain position </remarks> --*/
+		return (__src__) ;
+	}
+	/* A non-ASCII non-letter is a complete separator, not a collection of
+	 * alphabetic bytes.  Advance over it once so punctuation such as an en dash
+	 * and spacing such as a non-breaking space cannot enter adjacent tokens. */
+	if ((unsigned char) a >= 0x80)
+	{
+		__src__ += _Character_Length_(__src__) ;
+		set_term(__stand_param__,2,__scan_buf__) ;
 		return (__src__) ;
 	}
 	/*-- <remarks> Ignore everything not specified. Point to next input char. </remarks> --*/

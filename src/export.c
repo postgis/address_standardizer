@@ -7,6 +7,7 @@ into strings of text (in __standard_fields__).
 Prototype 7H08 (This file was written by Walter Sinclair).
 
 Copyright (c) 2009 Walter Bruce Sinclair
+Copyright (c) 2026 Darafei Praliaskouski <me@komzpa.net>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -30,6 +31,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 /* -- local prototypes -- */
 static void _copy_standard_( STAND_PARAM * , SYMB , int , int  ) ;
 static void _scan_target_( STAND_PARAM * , SYMB , int  ) ;
+static void _scan_unit_target_( STAND_PARAM * , int  ) ;
 static char *_get_standard_( STAND_PARAM * , int , int ) ;
 static char *_get_definition_text_( STAND_PARAM * , int ) ;
 
@@ -187,8 +189,7 @@ void stuff_fields( STAND_PARAM *__stand_param__ )
 	/*-- These two fields have two tokens for each field --*/
 	_scan_target_( __stand_param__ , BOXH, NEEDHEAD ) ;
 	_scan_target_( __stand_param__ , BOXT, NEEDHEAD ) ;
-	_scan_target_( __stand_param__ , UNITH, NEEDHEAD+1 ) ;
-	_scan_target_( __stand_param__ , UNITT, NEEDHEAD+1 ) ;
+	_scan_unit_target_( __stand_param__ , NEEDHEAD+1 ) ;
 }
 
 //#ifndef BUILD_API
@@ -387,6 +388,29 @@ static void _scan_target_(STAND_PARAM *__stand_param__,SYMB sym , int dest)
 }
 
 /*-----------------------------------------
+export.c (_scan_unit_target_ )
+-- calls export.c (_copy_standard_)
+-------------------------------------------*/
+static void _scan_unit_target_(STAND_PARAM *__stand_param__, int dest)
+{
+	int i ;
+	int n = __stand_param__->LexNum ;
+	SYMB *__output_syms__ = __stand_param__->best_output ;
+
+	/* Unit headers and identifiers share one field.  Scan both symbols in
+	 * lexical order so repeated pairs stay associated in the output. */
+	for (i = FIRST_LEX_POS; i < n; i++)
+	{
+		SYMB sym = __output_syms__[i] ;
+
+		if ((sym == UNITH) || (sym == UNITT))
+		{
+			_copy_standard_(__stand_param__,sym,dest,i) ;
+		}
+	}
+}
+
+/*-----------------------------------------
 export.c (_copy_standard_)
 -- called by export.c (_scan_target_) --
 --calls export.c (_get_standard_,
@@ -429,4 +453,3 @@ static void _copy_standard_( STAND_PARAM *__stand_param__ , SYMB output_sym , in
 		strcpy( __dest_buf__ , __stan_str__ ) ;
 	}
 }
-
