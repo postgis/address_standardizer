@@ -169,10 +169,6 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
             print(f"Using cached archive: {dest_path} ({cached_size/(1024*1024):.2f} MB)")
             return dest_path
         print(f"Cached archive is invalid; downloading it again: {dest_path}")
-        try:
-            os.remove(dest_path)
-        except FileNotFoundError:
-            pass
 
     url = f"https://ftp.ibge.gov.br/Cadastro_Nacional_de_Enderecos_para_Fins_Estatisticos/Censo_Demografico_2022/Arquivos_CNEFE/CSV/UF/{filename}"
     print(f"Downloading official Brazilian CNEFE data for {uf_upper}: {url}")
@@ -237,7 +233,19 @@ def ensure_tables_exist() -> None:
         cep varchar(9),
         latitude double precision,
         longitude double precision,
-        geom geometry(Point, 4326)
+        geom geometry(Point, 4326),
+        street_name text GENERATED ALWAYS AS (
+            CASE
+                WHEN titulo IS NULL OR titulo = '' THEN logradouro
+                ELSE titulo || ' ' || logradouro
+            END
+        ) STORED,
+        house_number text GENERATED ALWAYS AS (
+            CASE
+                WHEN modificador IS NULL OR modificador = '' THEN numero
+                ELSE numero || ' ' || modificador
+            END
+        ) STORED
     );
     COMMIT;
     """
@@ -356,7 +364,7 @@ def import_cnefe_to_postgres(
                         logradouro = logr_base
 
                         numero = row.get("NUM_ENDERECO", "").strip()
-                        modificador = row.get("DSC_MODIFICADOR", "").strip()
+                        modificador = remove_accents(row.get("DSC_MODIFICADOR", ""))
                         bairro = remove_accents(row.get("DSC_LOCALIDADE", ""))
                         cep = row.get("CEP", "").strip()
                         # CNEFE 2022's published CSV dictionary names these columns exactly.
@@ -439,11 +447,11 @@ def import_cnefe_to_postgres(
         post_import_sql = f"""
         BEGIN;
         SELECT pg_advisory_xact_lock(hashtext('address_standardizer:cnefe_schema'));
-        CREATE INDEX IF NOT EXISTS idx_cnefe_lookup ON cnefe_enderecos (uf, municipio, logradouro, numero);
+        CREATE INDEX IF NOT EXISTS idx_cnefe_lookup ON cnefe_enderecos (uf, municipio, tipo, street_name, house_number);
         CREATE INDEX IF NOT EXISTS idx_cnefe_cep ON cnefe_enderecos (cep);
         CREATE INDEX IF NOT EXISTS idx_cnefe_geom ON cnefe_enderecos USING GIST (geom);
         CREATE INDEX IF NOT EXISTS idx_cnefe_geog ON cnefe_enderecos USING GIST ((geom::geography));
-        CREATE INDEX IF NOT EXISTS idx_cnefe_logr_trgm ON cnefe_enderecos USING GIN (logradouro gin_trgm_ops);
+        CREATE INDEX IF NOT EXISTS idx_cnefe_street_trgm ON cnefe_enderecos USING GIN (street_name gin_trgm_ops);
         ANALYZE cnefe_enderecos;
         COMMIT;
         """

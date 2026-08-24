@@ -252,8 +252,8 @@ class TestBrazilianCnefeGeocoder(unittest.TestCase):
             if os.path.exists(zip_path):
                 os.remove(zip_path)
 
-    def test_download_cnefe_tolerates_concurrent_cache_removal(self):
-        """Another downloader may remove an invalid cache entry first."""
+    def test_download_cnefe_replaces_invalid_cache_only_after_validation(self):
+        """A corrupt cache remains at its pathname until its replacement is ready."""
         data = self.cnefe_zip_bytes()
         mock_resp = MagicMock()
         mock_resp.headers = {"Content-Length": str(len(data))}
@@ -263,15 +263,45 @@ class TestBrazilianCnefeGeocoder(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             cache_path = os.path.join(temp_dir, "15_PA.zip")
+            corrupt_data = b"not a ZIP archive" * 70_000
             with open(cache_path, "wb") as cache:
-                cache.write(b"not a ZIP archive" * 70_000)
+                cache.write(corrupt_data)
+
+            real_replace = os.replace
+
+            def assert_old_cache_then_replace(source, destination):
+                with open(destination, "rb") as old_cache:
+                    self.assertEqual(old_cache.read(), corrupt_data)
+                real_replace(source, destination)
 
             with patch("urllib.request.urlopen", return_value=mock_resp), \
-                 patch("import_brazilian_cnefe.os.remove", side_effect=FileNotFoundError):
+                 patch("import_brazilian_cnefe.os.replace", side_effect=assert_old_cache_then_replace) as mock_replace:
                 dest = import_brazilian_cnefe.download_cnefe("PA", temp_dir)
 
+            mock_replace.assert_called_once()
             with open(dest, "rb") as cache:
                 self.assertEqual(cache.read(), data)
+
+    def test_download_failure_preserves_existing_invalid_cache(self):
+        """A failed replacement download does not remove the existing pathname."""
+        mock_resp = MagicMock()
+        mock_resp.headers = {"Content-Length": "1000"}
+        mock_resp.read.side_effect = [b"short", b""]
+        mock_resp.__enter__.return_value = mock_resp
+        mock_resp.__exit__.return_value = False
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_path = os.path.join(temp_dir, "15_PA.zip")
+            corrupt_data = b"old corrupt cache" * 70_000
+            with open(cache_path, "wb") as cache:
+                cache.write(corrupt_data)
+
+            with patch("urllib.request.urlopen", return_value=mock_resp):
+                with self.assertRaisesRegex(IOError, "Truncated download"):
+                    import_brazilian_cnefe.download_cnefe("PA", temp_dir)
+
+            with open(cache_path, "rb") as cache:
+                self.assertEqual(cache.read(), corrupt_data)
 
     def test_download_cnefe_tolerates_cache_removal_before_stat(self):
         """A cache entry may disappear between discovery and the initial stat."""
@@ -371,7 +401,9 @@ class TestBrazilianCnefeGeocoder(unittest.TestCase):
             "cep varchar(9)",
             "latitude double precision",
             "longitude double precision",
-            "geom geometry(Point, 4326)"
+            "geom geometry(Point, 4326)",
+            "street_name text GENERATED ALWAYS AS",
+            "house_number text GENERATED ALWAYS AS"
         ]
 
         for col in expected_columns:
@@ -418,8 +450,18 @@ class TestBrazilianCnefeGeocoder(unittest.TestCase):
 
         # Both exact and fuzzy geocoding must disambiguate streets that share a name and number.
         self.assertEqual(docs_content.count("AND c.tipo = p.pretype"), 2)
-        self.assertIn("`NOM_SEGLOGR` is the canonical street-name key", docs_content)
-        self.assertIn("CONCAT_WS(' ', c.tipo, c.titulo, c.logradouro)", docs_content)
+        self.assertEqual(docs_content.count("c.street_name = p.name"), 1)
+        self.assertEqual(docs_content.count("c.street_name % p.name"), 1)
+        self.assertEqual(docs_content.count("c.house_number = p.house_num"), 2)
+        self.assertIn("CONCAT_WS(' ', c.tipo, c.street_name)", docs_content)
+        self.assertIn(
+            "idx_cnefe_lookup ON cnefe_enderecos (uf, municipio, tipo, street_name, house_number)",
+            importer_content,
+        )
+        self.assertIn(
+            "idx_cnefe_street_trgm ON cnefe_enderecos USING GIN (street_name gin_trgm_ops)",
+            importer_content,
+        )
 
     def test_psql_base_cmd_host_mode_w_flag(self):
         """Verify that psql_base_cmd includes -w flag in direct host mode and sets PGPASSWORD."""
@@ -451,6 +493,12 @@ class TestBrazilianCnefeGeocoder(unittest.TestCase):
         self.assertIn("POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Please set POSTGRES_PASSWORD in .env}", compose_content)
         self.assertIn("healthcheck:", compose_content)
         self.assertIn("pg_isready", compose_content)
+
+        docs_path = os.path.join(EXAMPLE_DIR, "README.md")
+        with open(docs_path, "r", encoding="utf-8") as f:
+            docs_content = f.read()
+        self.assertIn("database sh -eu -c", docs_content)
+        self.assertIn("'exec psql -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"", docs_content)
 
     def test_ci_runs_cnefe_tooling_tests(self):
         """The CNEFE importer tests must run in every GitHub Actions matrix job."""
@@ -610,7 +658,7 @@ class TestBrazilianCnefeGeocoder(unittest.TestCase):
             post_import_sql = next(sql for sql in sql_commands if "idx_cnefe_lookup" in sql)
             self.assertLess(post_import_sql.index("BEGIN;"), post_import_sql.index("pg_advisory_xact_lock"))
             self.assertLess(post_import_sql.index("address_standardizer:cnefe_schema"), post_import_sql.index("CREATE INDEX"))
-            self.assertLess(post_import_sql.index("idx_cnefe_logr_trgm"), post_import_sql.index("ANALYZE cnefe_enderecos"))
+            self.assertLess(post_import_sql.index("idx_cnefe_street_trgm"), post_import_sql.index("ANALYZE cnefe_enderecos"))
             self.assertLess(post_import_sql.index("ANALYZE cnefe_enderecos"), post_import_sql.index("COMMIT;"))
         finally:
             if os.path.exists(zip_path):

@@ -38,9 +38,9 @@ files in `initdb/` only when it creates a new data directory.
 To install the extensions in an existing database without deleting data:
 
 ```bash
-docker compose exec -T database psql \
-  -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
-  -f /docker-entrypoint-initdb.d/10_extensions.sql
+docker compose exec -T database sh -eu -c \
+  'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+    -f /docker-entrypoint-initdb.d/10_extensions.sql'
 ```
 
 ## Import Brazilian CNEFE data
@@ -90,14 +90,29 @@ CREATE TABLE IF NOT EXISTS cnefe_enderecos (
     cep varchar(9),
     latitude double precision,
     longitude double precision,
-    geom geometry(Point, 4326)
+    geom geometry(Point, 4326),
+    street_name text GENERATED ALWAYS AS (
+        CASE
+            WHEN titulo IS NULL OR titulo = '' THEN logradouro
+            ELSE titulo || ' ' || logradouro
+        END
+    ) STORED,
+    house_number text GENERATED ALWAYS AS (
+        CASE
+            WHEN modificador IS NULL OR modificador = '' THEN numero
+            ELSE numero || ' ' || modificador
+        END
+    ) STORED
 );
 ```
 
-`NOM_SEGLOGR` is the canonical street-name key stored in `logradouro`.
-`NOM_TITULO_SEGLOGR` remains separate display metadata. Apartment, unit, and
-other complement fields are not stored or distinguished; matching stops at
-the building and house-number level.
+`logradouro` stores `NOM_SEGLOGR`, while `titulo` stores
+`NOM_TITULO_SEGLOGR`. The generated `street_name` combines both fields in the
+same form returned by the Brazilian standardizer. Likewise, `house_number`
+combines `NUM_ENDERECO` and `DSC_MODIFICADOR`, so a CNEFE row such as `100` +
+`A` matches standardized `100 A`. Apartment, unit, and other complement fields
+are not stored or distinguished; matching stops at the building and
+house-number level.
 
 ## Exact geocoding
 
@@ -114,8 +129,8 @@ FROM cnefe_enderecos AS c, parsed AS p
 WHERE c.uf = p.state
   AND c.municipio = p.city
   AND c.tipo = p.pretype
-  AND c.logradouro = p.name
-  AND c.numero = p.house_num
+  AND c.street_name = p.name
+  AND c.house_number = p.house_num
 LIMIT 1;
 ```
 
@@ -132,13 +147,13 @@ WITH parsed AS (
         'Sao Paulo, SP'
     )
 )
-SELECT c.*, similarity(c.logradouro, p.name) AS similarity_score
+SELECT c.*, similarity(c.street_name, p.name) AS similarity_score
 FROM cnefe_enderecos AS c, parsed AS p
 WHERE c.uf = p.state
   AND c.municipio = p.city
   AND c.tipo = p.pretype
-  AND c.numero = p.house_num
-  AND c.logradouro % p.name
+  AND c.house_number = p.house_num
+  AND c.street_name % p.name
 ORDER BY similarity_score DESC
 LIMIT 5;
 ```
@@ -150,8 +165,8 @@ KNN search.
 
 ```sql
 SELECT
-    CONCAT_WS(' ', c.tipo, c.titulo, c.logradouro) AS street,
-    c.numero,
+    CONCAT_WS(' ', c.tipo, c.street_name) AS street,
+    c.house_number,
     c.municipio,
     c.uf,
     c.cep,
