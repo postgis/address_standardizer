@@ -5,6 +5,7 @@ Unit tests for CNEFE import tooling.
 
 import io
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -87,7 +88,9 @@ class TestImportCnefe(unittest.TestCase):
             "3550308;RUA;;;100;;;;;;;;\n"  # Missing NOM_SEGLOGR -> must be skipped
             ";RUA;;PAULISTA;100;;;;;;;;\n"  # Missing COD_MUNICIPIO -> must be skipped
             "9999999;RUA;;ORFANATO;100;;;;;;;;\n"  # Unmapped COD_MUNICIPIO -> must be skipped
+            "3304557;RUA;;COPACABANA;200;;;;;;;;\n"  # Municipality belongs to RJ -> must be skipped
             "3550308;AVENIDA;PRESIDENTE;VARGAS;500;;PACAEMBU;01246-000;-23.5550;-46.6660;88;88\n"
+            "3500000;RUA;;SEM UF;300;;;;;;;;\n"  # Missing mapped UF is accepted
         )
         with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tf:
             zip_path = tf.name
@@ -110,7 +113,11 @@ class TestImportCnefe(unittest.TestCase):
 
             with patch("subprocess.run") as mock_run, \
                  patch("subprocess.Popen", return_value=mock_proc), \
-                 patch("import_cnefe.get_municipality_map", return_value={3550308: ("SAO PAULO", "SP")}):
+                 patch("import_cnefe.get_municipality_map", return_value={
+                     3550308: ("SAO PAULO", "SP"),
+                     3304557: ("RIO DE JANEIRO", "RJ"),
+                     3500000: ("SEM UF", ""),
+                 }):
 
                 mock_run.return_value = MagicMock(stdout="0\n")
                 import_cnefe.import_cnefe_to_postgres(zip_path, "SP")
@@ -118,11 +125,12 @@ class TestImportCnefe(unittest.TestCase):
             # Check lines sent via STDIN
             all_text = "".join(captured_output)
             written_lines = [line.strip().split("\t") for line in all_text.strip().split("\n") if line.strip()]
-            self.assertEqual(len(written_lines), 2)
+            self.assertEqual(len(written_lines), 3)
             self.assertEqual(written_lines[0][5], "AUGUSTA")
             self.assertEqual(written_lines[0][10:12], ["-23.5532", "-46.6521"])
             self.assertEqual(written_lines[1][4:6], ["PRESIDENTE", "VARGAS"])
             self.assertEqual(written_lines[1][10:12], ["-23.5550", "-46.6660"])
+            self.assertEqual(written_lines[2][5], "SEM UF")
         finally:
             if os.path.exists(zip_path):
                 os.remove(zip_path)
@@ -422,6 +430,7 @@ class TestImportCnefe(unittest.TestCase):
 
         self.assertIn("name: 'Test CNEFE tooling'", workflow_content)
         self.assertIn("run: python3 test/test_tools.py -q", workflow_content)
+        self.assertIn("permissions:\n  contents: read", workflow_content)
 
     def test_existing_cluster_upgrade_guidance(self):
         """Verify that docker/init.sql and tools/README.md document the upgrade procedure and POSTGRES_DATA_DIR reset."""
@@ -473,16 +482,43 @@ class TestImportCnefe(unittest.TestCase):
         self.assertTrue(first.endswith("8000000000000001"))
         self.assertTrue(second.endswith("8000000000000002"))
 
-    def test_isolated_per_uf_staging_table(self):
-        """Verify that import_cnefe.py creates and uses isolated unique staging tables to avoid concurrency conflicts."""
-        import_cnefe_path = os.path.join(REPO_ROOT, "tools", "import_cnefe.py")
-        with open(import_cnefe_path, "r", encoding="utf-8") as f:
-            content = f.read()
+    @patch("subprocess.Popen")
+    @patch("subprocess.run")
+    def test_isolated_per_uf_staging_table(self, mock_run, mock_popen):
+        """A failed import must clean up the same unique staging table it created."""
+        stage_table = "cnefe_stage_sp_unique_run"
+        mock_proc = MagicMock()
+        mock_proc.stdin = io.StringIO()
+        mock_proc.wait.return_value = 1
+        mock_popen.return_value = mock_proc
 
-        self.assertIn('stage_table = stage_table_name(uf_upper)', content)
-        self.assertIn('run_id = generate_uuid7().replace("-", "")', content)
-        self.assertIn('DROP TABLE IF EXISTS {stage_table}', content)
-        self.assertIn('finally:', content)
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tf:
+            zip_path = tf.name
+
+        try:
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                archive.writestr(
+                    "test.csv",
+                    "COD_MUNICIPIO;NOM_SEGLOGR\n3550308;AUGUSTA\n",
+                )
+
+            with patch("import_cnefe.ensure_tables_exist"), \
+                 patch("import_cnefe.stage_table_name", return_value=stage_table) as mock_name:
+                with self.assertRaises(subprocess.CalledProcessError):
+                    import_cnefe.import_cnefe_to_postgres(
+                        zip_path,
+                        "SP",
+                        muni_map={3550308: ("SAO PAULO", "SP")},
+                    )
+
+            mock_name.assert_called_once_with("SP")
+            sql_commands = [" ".join(call.args[0]) for call in mock_run.call_args_list]
+            self.assertTrue(any(f"CREATE UNLOGGED TABLE IF NOT EXISTS {stage_table}" in sql for sql in sql_commands))
+            self.assertIn(f"COPY {stage_table}", " ".join(mock_popen.call_args.args[0]))
+            self.assertTrue(any(f"DROP TABLE IF EXISTS {stage_table}" in sql for sql in sql_commands))
+        finally:
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
 
     @patch("subprocess.Popen")
     @patch("subprocess.run")
@@ -553,6 +589,8 @@ class TestImportCnefe(unittest.TestCase):
             self.assertLess(swap_sql.index("DO $$"), swap_sql.index("DELETE FROM cnefe_enderecos"))
             self.assertIn("COMMIT", swap_sql)
             self.assertFalse(any("UPDATE cnefe_enderecos" in sql for sql in sql_commands))
+            post_import_sql = next(sql for sql in sql_commands if "idx_cnefe_lookup" in sql)
+            self.assertLess(post_import_sql.index("idx_cnefe_logr_trgm"), post_import_sql.index("ANALYZE cnefe_enderecos"))
         finally:
             if os.path.exists(zip_path):
                 os.remove(zip_path)

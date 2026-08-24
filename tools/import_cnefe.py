@@ -214,7 +214,7 @@ def download_cnefe(uf: str, dest_dir: str) -> str:
             os.remove(tmp_path)
 
 def ensure_tables_exist() -> None:
-    """Ensures that the cnefe_enderecos table, staging table, and required extensions exist in PostgreSQL."""
+    """Ensures that the target table and required extensions exist in PostgreSQL."""
     sql = """
     BEGIN;
     SELECT pg_advisory_xact_lock(hashtext('address_standardizer:cnefe_schema'));
@@ -237,21 +237,6 @@ def ensure_tables_exist() -> None:
         latitude double precision,
         longitude double precision,
         geom geometry(Point, 4326)
-    );
-
-    CREATE UNLOGGED TABLE IF NOT EXISTS cnefe_stage (
-        cod_municipio_ibge integer NOT NULL,
-        municipio text NOT NULL,
-        uf varchar(2) NOT NULL,
-        tipo text,
-        titulo text,
-        logradouro text NOT NULL,
-        numero text,
-        modificador text,
-        bairro text,
-        cep varchar(9),
-        latitude double precision,
-        longitude double precision
     );
     COMMIT;
     """
@@ -360,6 +345,9 @@ def import_cnefe_to_postgres(
                         municipio = muni_info[0]
                         if not municipio:
                             continue  # Filter out records without a mapped municipality name
+                        muni_uf = muni_info[1]
+                        if muni_uf and muni_uf != uf_upper:
+                            continue  # Reject records whose municipality belongs to another UF
 
                         tipo = remove_accents(row.get("NOM_TIPO_SEGLOGR", ""))
                         titulo = remove_accents(row.get("NOM_TITULO_SEGLOGR", ""))
@@ -451,6 +439,7 @@ def import_cnefe_to_postgres(
         CREATE INDEX IF NOT EXISTS idx_cnefe_geom ON cnefe_enderecos USING GIST (geom);
         CREATE INDEX IF NOT EXISTS idx_cnefe_geog ON cnefe_enderecos USING GIST ((geom::geography));
         CREATE INDEX IF NOT EXISTS idx_cnefe_logr_trgm ON cnefe_enderecos USING GIN (logradouro gin_trgm_ops);
+        ANALYZE cnefe_enderecos;
         """
         subprocess.run(psql_base_cmd() + ["-c", post_import_sql], check=True)
         print(f"✅ Geometrias PostGIS e índices otimizados para {uf_upper} com sucesso!")
