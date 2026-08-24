@@ -10,6 +10,7 @@ Note:
 """
 
 import gzip
+import itertools
 import json
 import os
 import unicodedata
@@ -587,6 +588,33 @@ def generate_br_rules_sql(output_path: str):
     rules.append(([2, 1, 1, 7, 1, 0], [4, 5, 5, 5, 5, 1], 1, 16))
     rules.append(([2, 1, 1, 7, 1, 1, 0], [4, 5, 5, 5, 5, 5, 1], 1, 16))
 
+    # Single- and double-letter street components are emitted by the scanner
+    # as SINGLE/DOUBLE rather than WORD (Rua A 100, Rua XV de Novembro 100).
+    # Keep these forms in street-name position only; token 18 remains a unit
+    # identifier elsewhere in the grammar.
+    for component_count in range(1, 5):
+        for components in itertools.product((1, 18, 21), repeat=component_count):
+            # A single SINGLE/DOUBLE component is sufficient for the reviewed
+            # forms and avoids making arbitrary runs of unit-like tokens
+            # indistinguishable from street names.
+            if sum(token != 1 for token in components) > 1:
+                continue
+            rules.append((
+                [2] + list(components) + [0],
+                [4] + [5] * component_count + [1],
+                1,
+                16,
+            ))
+            if component_count > 1:
+                # The common Portuguese connector is a stopword between
+                # otherwise ordinary street-name components.
+                for connector_at in range(component_count - 1):
+                    inp = [2] + list(components[:connector_at + 1]) + [7] + list(components[connector_at + 1:]) + [0]
+                    # The connector is consumed as part of the street name,
+                    # so it needs its own STREET output slot as well.
+                    out = [4] + [5] * (component_count + 1) + [1]
+                    rules.append((inp, out, 1, 16))
+
     # Ampersands are lexical connectors in Brazilian street names.
     rules.append(([2, 1, 13, 1, 0], [4, 5, 5, 5, 1], 1, 16))
 
@@ -703,6 +731,15 @@ def generate_br_rules_sql(output_path: str):
     rules.append(([1, 1, 0], [5, 5, 1], 1, 12))
     rules.append(([1, 1, 1, 0], [5, 5, 5, 1], 1, 12))
     rules.append(([1, 7, 1, 0], [5, 5, 5, 1], 1, 12))
+
+    # Untyped streets may carry the same unit headers as typed streets
+    # (Paulista 1000 Apto 101).  Restrict this to a street WORD sequence and
+    # the known BUILDH vocabulary so ordinary trailing words stay negative.
+    for street_count in range(1, 4):
+        street = [1] * street_count
+        out_street = [5] * street_count
+        for unit_id, unit_out in [([0], [17]), ([1], [17]), ([18], [17]), ([23], [17]), ([0, 18], [17, 17])]:
+            rules.append((street + [0, 19] + unit_id, out_street + [1, 16] + unit_out, 1, 16))
 
     # 6. Kilometer-addressed roads: [ROAD/TYPE] [WORD...] [MILE] [NUMBER]
     # RODOVIA has the dedicated ROAD token, while ESTRADA shares TYPE with

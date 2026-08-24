@@ -67,5 +67,11 @@ SELECT '#br42' AS ticket, house_num, pretype, name, ruralroute FROM standardize_
     'br_lex', 'br_gaz', 'br_rules', 'Rodovia SP-330 Km 100', 'Sao Paulo, SP');
 SELECT '#br43' AS ticket, house_num, pretype, name, ruralroute FROM standardize_address(
     'br_lex', 'br_gaz', 'br_rules', 'Rodovia SP 330', 'Sao Paulo, SP');
+SELECT '#br44' AS ticket, house_num, pretype, name FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua A 100', 'Sao Paulo, SP');
+SELECT '#br45' AS ticket, house_num, pretype, name FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua XV de Novembro 100', 'Sao Paulo, SP');
+SELECT '#br46' AS ticket, house_num, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Paulista 1000 Apto 101', 'Sao Paulo, SP');
 \pset format aligned
 -- End Brazilian address standardizer regression tests

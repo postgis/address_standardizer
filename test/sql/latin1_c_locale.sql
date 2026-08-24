@@ -10,6 +10,12 @@ BEGIN
 	IF current_setting('server_encoding') <> 'LATIN1' THEN
 		RAISE EXCEPTION 'LATIN1 scanner test is running in the wrong database';
 	END IF;
+	IF NOT EXISTS (
+		SELECT 1 FROM br_lex
+		WHERE word = 'BALNEÁRIO' AND stdword = 'BALNEARIO'
+	) THEN
+		RAISE EXCEPTION 'UTF8 BR lexicon row was not loaded without mojibake';
+	END IF;
 
 	standardized := standardize_address(
 		'br_lex', 'br_gaz', 'br_rules',
@@ -18,7 +24,7 @@ BEGIN
 	   OR standardized.house_num IS DISTINCT FROM '100'
 	   OR standardized.pretype IS DISTINCT FROM 'RUA'
 	   OR standardized.name IS DISTINCT FROM 'AÇUCENA'
-	   OR standardized.city IS DISTINCT FROM 'SÃO PAULO' THEN
+	   OR standardized.city IS DISTINCT FROM 'SAO PAULO' THEN
 		RAISE EXCEPTION 'LATIN1 C-locale Portuguese address was not standardized';
 	END IF;
 
