@@ -25,6 +25,17 @@ def normalize_text(text: str) -> str:
 def escape_sql(text: str) -> str:
     return text.replace("'", "''")
 
+
+def scanner_compatible_aliases(text: str):
+    """Return aliases needed after scanner punctuation handling."""
+    aliases = {text}
+    if "-" in text:
+        # The PAGC scanner treats ASCII hyphens as token breaks, so phrase
+        # lookup needs the spelling reconstructed from the resulting words.
+        aliases.add(text.replace("-", " "))
+    return aliases
+
+
 # -------------------------------------------------------------
 # 1. BRAZILIAN LEXICON DEFINITION (br_lex)
 # Token definitions from pagc_api.h:
@@ -279,6 +290,14 @@ CONNECTORS = [
     (",", ",", 9),
 ]
 
+# The scanner classifies the numeric prefixes of these date-named streets as
+# NUMBER.  Phrase entries preserve the connector while letting the existing
+# TYPE WORD WORD NUMBER rules distinguish the final house number.
+NUMERIC_STREET_PREFIXES = [
+    ("9 DE", "9 DE", 1),
+    ("25 DE", "25 DE", 1),
+]
+
 # -------------------------------------------------------------
 # 2. BRAZILIAN STATES (UFs) AND NATION
 # -------------------------------------------------------------
@@ -360,6 +379,10 @@ def generate_br_lex_sql(output_path: str):
 
     # Add Connectors
     for word, stdword, tok in CONNECTORS:
+        entries.append((1, word, stdword, tok))
+
+    # Add reviewed numeric date-name prefixes as context-specific phrases.
+    for word, stdword, tok in NUMERIC_STREET_PREFIXES:
         entries.append((1, word, stdword, tok))
 
     # Deduplicate entries by (word, stdword, token)
@@ -451,11 +474,13 @@ def generate_br_gaz_sql(output_path: str, ibge_data: list):
         if nome:
             norm_nome = normalize_text(nome)
             # City entry (Token 10 = CITY) and Word (Token 1)
-            gaz_entries.append((norm_nome, norm_nome, 10))
-            gaz_entries.append((norm_nome, norm_nome, 1))
+            for alias in scanner_compatible_aliases(norm_nome):
+                gaz_entries.append((alias, norm_nome, 10))
+                gaz_entries.append((alias, norm_nome, 1))
             if nome.upper() != norm_nome:
-                gaz_entries.append((nome.upper(), norm_nome, 10))
-                gaz_entries.append((nome.upper(), norm_nome, 1))
+                for alias in scanner_compatible_aliases(nome.upper()):
+                    gaz_entries.append((alias, norm_nome, 10))
+                    gaz_entries.append((alias, norm_nome, 1))
 
     # Clean sequence numbers per word
     word_groups = {}

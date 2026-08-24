@@ -57,6 +57,24 @@ class TestGenerateBrData(unittest.TestCase):
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
+    def test_hyphenated_municipalities_get_scanner_compatible_aliases(self):
+        """Hyphenated IBGE names also match the scanner's joined spelling."""
+        mock_ibge = [
+            {"id": 2404309, "nome": "Governador Dix-Sept Rosado"},
+            {"id": 3550308, "nome": "São Paulo"},
+        ]
+        with tempfile.NamedTemporaryFile(suffix=".sql") as tf:
+            generate_br_data.generate_br_gaz_sql(tf.name, mock_ibge)
+            with open(tf.name, "r", encoding="utf-8") as f:
+                content = f.read()
+
+        self.assertIn(
+            "'GOVERNADOR DIX SEPT ROSADO', 'GOVERNADOR DIX-SEPT ROSADO', 10",
+            content,
+        )
+        self.assertIn("'GOVERNADOR DIX-SEPT ROSADO', 'GOVERNADOR DIX-SEPT ROSADO', 10", content)
+        self.assertEqual(generate_br_data.scanner_compatible_aliases("SAO PAULO"), {"SAO PAULO"})
+
     def test_provenance_and_licensing(self):
         """Verify that the README and generated SQL carry source and license provenance."""
         readme_path = os.path.join(REPO_ROOT, "README.md")
@@ -188,6 +206,19 @@ class TestGenerateBrData(unittest.TestCase):
         self.assertIn("6 1 1 1 20 0 -1 4 5 5 5 8 1 -1 1 16", content)
         self.assertIn("2 7 1 20 0 -1 4 5 5 8 1 -1 1 16", content)
         self.assertIn("2 1 19 0 -1 4 5 16 1 -1 1 16", content)
+        self.assertIn("2 1 0 -1 4 5 1 -1 1 16", content)
+
+    def test_numeric_street_prefixes_are_context_specific_phrases(self):
+        """Reviewed date-name prefixes become words without changing bare numbers."""
+        with tempfile.NamedTemporaryFile(suffix=".sql") as tf:
+            generate_br_data.generate_br_lex_sql(tf.name)
+            with open(tf.name, "r", encoding="utf-8") as f:
+                content = f.read()
+
+        self.assertIn("'9 DE', '9 DE', 1", content)
+        self.assertIn("'25 DE', '25 DE', 1", content)
+        self.assertNotIn("'9', '9', 1", content)
+        self.assertNotIn("'25', '25', 1", content)
 
     def test_control_file_version_synchronization(self):
         """Verify that all extension control files have synchronized versions."""

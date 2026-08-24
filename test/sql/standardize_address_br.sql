@@ -23,5 +23,11 @@ SELECT '#br20' AS ticket, house_num, pretype, name FROM standardize_address('br_
 SELECT '#br21' AS ticket, house_num, pretype, name, city FROM standardize_address(
     'br_lex', 'br_gaz', 'br_rules',
     U&'Rua Ac\0327ucena 100', U&'Sa\0303o Paulo, SP');
+SELECT '#br22' AS ticket, house_num, pretype, name FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua 25 de Março 100', 'Sao Paulo, SP');
+SELECT '#br23' AS ticket, house_num, pretype, name FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Avenida 9 de Julho 200', 'Sao Paulo, SP');
+SELECT '#br24' AS ticket, city, state FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100', 'Governador Dix-Sept Rosado, RN');
 \pset format aligned
 -- End Brazilian address standardizer regression tests

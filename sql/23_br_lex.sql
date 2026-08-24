@@ -25,6 +25,8 @@ WITH t(seq,word,stdword,token) AS ( VALUES
 (1, ',', ',', 9),
 (1, '-', '-', 9),
 (1, '/', '/', 9),
+(1, '25 DE', '25 DE', 1),
+(1, '9 DE', '9 DE', 1),
 (1, 'AC', 'AC', 1),
 (1, 'AL', 'AL', 1),
 (2, 'AL', 'ALAMEDA', 2),
