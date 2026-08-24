@@ -212,10 +212,13 @@ UNIT_WORDS = [
     ("LT.", "LOTE", 19),
     ("CASA", "CASA", 19),
     ("CS", "CASA", 19),
-    ("FUNDOS", "FUNDOS", 19),
-    ("FDS", "FUNDOS", 19),
-    ("FRENTE", "FRENTE", 19),
-    ("FRT", "FRENTE", 19),
+    # These complements are complete unit descriptions and do not require a
+    # following identifier.  UNITH keeps them distinct from APTO/BLOCO-style
+    # headers, which remain BUILDH and require an identifier in the grammar.
+    ("FUNDOS", "FUNDOS", 16),
+    ("FDS", "FUNDOS", 16),
+    ("FRENTE", "FRENTE", 16),
+    ("FRT", "FRENTE", 16),
     ("SOBRADO", "SOBRADO", 19),
     ("SOB", "SOBRADO", 19),
     ("COBERTURA", "COBERTURA", 19),
@@ -572,6 +575,9 @@ def generate_br_rules_sql(output_path: str):
     rules.append(([2, 1, 1, 7, 1, 0], [4, 5, 5, 5, 5, 1], 1, 16))
     rules.append(([2, 1, 1, 7, 1, 1, 0], [4, 5, 5, 5, 5, 5, 1], 1, 16))
 
+    # Ampersands are lexical connectors in Brazilian street names.
+    rules.append(([2, 1, 13, 1, 0], [4, 5, 5, 5, 1], 1, 16))
+
     # With Cardinal direction: Ex: Rua Augusta Norte 100
     rules.append(([2, 22, 0], [4, 5, 1], 1, 16))
     rules.append(([2, 1, 22, 0], [4, 5, 7, 1], 1, 16))
@@ -624,7 +630,8 @@ def generate_br_rules_sql(output_path: str):
     rules.append(([2, 1, 7, 1, 0, 19, 1], [4, 5, 5, 5, 1, 16, 17], 1, 16))
     rules.append(([2, 7, 1, 0, 19, 1], [4, 5, 5, 1, 16, 17], 1, 16))
 
-    # Lettered unit identifiers are tokenized as SINGLE (Ex: Bloco B, Apto A).
+    # Unit identifiers may be SINGLE, MIXED, or NUMBER + SINGLE.
+    # Ex: Bloco B, Apto A, Apto 101A.
     for input_prefix, output_prefix in [
         ([2, 1, 0, 19], [4, 5, 1, 16]),
         ([2, 1, 1, 0, 19], [4, 5, 5, 1, 16]),
@@ -633,6 +640,18 @@ def generate_br_rules_sql(output_path: str):
         ([2, 7, 1, 0, 19], [4, 5, 5, 1, 16]),
     ]:
         rules.append((input_prefix + [18], output_prefix + [17], 1, 16))
+        rules.append((input_prefix + [23], output_prefix + [17], 1, 16))
+        rules.append((input_prefix + [0, 18], output_prefix + [17, 17], 1, 16))
+
+    # FUNDOS and FRENTE are complete unit descriptions without identifiers.
+    for input_prefix, output_prefix in [
+        ([2, 1, 0], [4, 5, 1]),
+        ([2, 1, 1, 0], [4, 5, 5, 1]),
+        ([2, 1, 1, 1, 0], [4, 5, 5, 5, 1]),
+        ([2, 1, 7, 1, 0], [4, 5, 5, 5, 1]),
+        ([2, 7, 1, 0], [4, 5, 5, 1]),
+    ]:
+        rules.append((input_prefix + [16], output_prefix + [16], 1, 16))
 
     # 3. [TYPE] [STREET...] [NUMBER] [UNITH] [WORD/NUMBER] [UNITH] [NUMBER]
     # Ex: Rua Augusta 100 Bloco B Apto 101
@@ -768,6 +787,10 @@ def generate_br_rules_sql(output_path: str):
 
     # 6. [STATE] only
     rules.append(([11], [11], 0, 10))
+    rules.append(([11, 0], [11, 13], 0, 16))
+    rules.append(([11, 0, 0], [11, 13, 13], 0, 16))
+    rules.append(([11, 0, 12], [11, 13, 12], 0, 16))
+    rules.append(([11, 0, 0, 12], [11, 13, 13, 12], 0, 16))
     rules.append(([11, 12], [11, 12], 0, 12))
 
     # 7. [POSTAL] only

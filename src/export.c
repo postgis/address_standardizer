@@ -442,7 +442,16 @@ static void _copy_standard_( STAND_PARAM *__stand_param__ , SYMB output_sym , in
 	}
 	if ( *__dest_buf__ != SENTINEL )
 	{
-		SPACE_APPEND_WITH_LEN( __dest_buf__ , __stan_str__ , MAXFLDLEN ) ;
+		/* Postal pieces use their canonical separator; all other repeated
+		 * output symbols remain space-delimited. */
+		if ( output_sym == POSTAL )
+		{
+			char_append( "-" , __dest_buf__ , __stan_str__ , MAXFLDLEN ) ;
+		}
+		else
+		{
+			SPACE_APPEND_WITH_LEN( __dest_buf__ , __stan_str__ , MAXFLDLEN ) ;
+		}
 	}
 	else if (( output_sym == UNITT ) && !has_unit_header)
 	{

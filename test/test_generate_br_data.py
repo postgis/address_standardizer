@@ -207,6 +207,23 @@ class TestGenerateBrData(unittest.TestCase):
         self.assertIn("2 7 1 20 0 -1 4 5 5 8 1 -1 1 16", content)
         self.assertIn("2 1 19 0 -1 4 5 16 1 -1 1 16", content)
         self.assertIn("2 1 0 -1 4 5 1 -1 1 16", content)
+        self.assertIn("2 1 13 1 0 -1 4 5 5 5 1 -1 1 16", content)
+        self.assertIn("2 1 0 19 23 -1 4 5 1 16 17 -1 1 16", content)
+        self.assertIn("2 1 0 19 0 18 -1 4 5 1 16 17 17 -1 1 16", content)
+        self.assertIn("2 1 0 16 -1 4 5 1 16 -1 1 16", content)
+        self.assertIn("11 0 -1 11 13 -1 0 16", content)
+        self.assertIn("11 0 0 -1 11 13 13 -1 0 16", content)
+
+    def test_standalone_unit_words_use_a_distinct_token(self):
+        """Identifier-free complements must not make all unit headers standalone."""
+        with tempfile.NamedTemporaryFile(suffix=".sql") as tf:
+            generate_br_data.generate_br_lex_sql(tf.name)
+            with open(tf.name, "r", encoding="utf-8") as f:
+                content = f.read()
+
+        self.assertIn("'FUNDOS', 'FUNDOS', 16", content)
+        self.assertIn("'FRENTE', 'FRENTE', 16", content)
+        self.assertIn("'APTO', 'APTO', 19", content)
 
     def test_numeric_street_prefixes_are_context_specific_phrases(self):
         """Reviewed date-name prefixes become words without changing bare numbers."""

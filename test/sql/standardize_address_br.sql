@@ -31,5 +31,19 @@ SELECT '#br24' AS ticket, city, state FROM standardize_address(
     'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100', 'Governador Dix-Sept Rosado, RN');
 SELECT '#br25' AS ticket, house_num, pretype, name, sufdir, unit FROM standardize_address(
     'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta Nº 100', 'Sao Paulo, SP');
+SELECT '#br26' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100 Apto 101A', 'Sao Paulo, SP');
+SELECT '#br27' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100 Apto 101 A', 'Sao Paulo, SP');
+SELECT '#br28' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100 Fundos', 'Sao Paulo, SP');
+SELECT '#br29' AS ticket, house_num, pretype, name, unit FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100 Frente', 'Sao Paulo, SP');
+SELECT '#br30' AS ticket, state, postcode FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100', 'SP, 01310');
+SELECT '#br31' AS ticket, state, postcode FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua Augusta 100', 'SP, 01310-100');
+SELECT '#br32' AS ticket, house_num, pretype, name, city FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules', 'Rua João & Maria 100', 'Sao Paulo, SP');
 \pset format aligned
 -- End Brazilian address standardizer regression tests
