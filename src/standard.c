@@ -40,6 +40,16 @@ static int _Close_Stand_Field_(STAND_PARAM *) ;
 static int _Scan_String_(STAND_PARAM *, char *) ;
 static char * _Scan_Next_(STAND_PARAM *, char *) ;
 
+/*
+ * The scanner works with bytes, while upper_case() applies the database
+ * collation to the completed token. Keep UTF-8 multibyte characters in that
+ * token instead of dropping them between ASCII alphabetic runs.
+ */
+static int _Is_Alphabetic_Byte_(unsigned char character)
+{
+	return isalpha(character) || character >= 0x80;
+}
+
 static char __spacer__[] = " \\-.)}>_" ;
 
 #define NO_STANDARDIZATION_PREFIX "std_standardize_mm: No standardization of "
@@ -283,9 +293,9 @@ static char * _Scan_Next_( STAND_PARAM *__stand_param__,char * __in_ptr__)
 		RETURN_NEW_MORPH(DSINGLE) ;
 	}
 	/*-- <remarks> Alphabetic sequence </remarks> --*/
-	if ((isalpha(a)) || (a == '\'') || (a == '#'))
+	if (_Is_Alphabetic_Byte_((unsigned char) a) || (a == '\'') || (a == '#'))
 	{
-		COLLECT_WHILE((isalpha(a)) || (a == '\'')) ;
+		COLLECT_WHILE(_Is_Alphabetic_Byte_((unsigned char) a) || (a == '\'')) ;
 		TERM_AND_LENGTH ;
 		/*-- <remarks> Retain position </remarks> --*/
 		switch (n)

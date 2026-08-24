@@ -512,7 +512,7 @@ def generate_br_rules_sql(output_path: str):
     Input:
       0: NUMBER, 1: WORD, 2: TYPE, 6: ROAD, 7: STOPWORD, 9: DASH,
       11: STATE/PROV (in gaz), 12: COUNTRY/NATION (in gaz), 13: AMPERS,
-      15: ORD, 16: UNITH, 18: SINGLE, 19: BUILDH, 20: MILE, 22: DIRECT,
+      15: ORD, 16: UNITH, 18: SINGLE, 19: BUILDH, 20: MILE, 22: DIRECT, 23: MIXED,
       27, 28, 29: POSTAL
     Output:
       0: BLDNG, 1: HOUSE, 2: PREDIR, 3: QUALIF, 4: PRETYP, 5: STREET, 6: SUFTYP,
@@ -548,6 +548,31 @@ def generate_br_rules_sql(output_path: str):
     rules.append(([2, 1, 22, 0], [4, 5, 7, 1], 1, 16))
     rules.append(([2, 1, 1, 22, 0], [4, 5, 5, 7, 1], 1, 16))
 
+    # Letter-suffixed and mixed house numbers (Ex: Rua Augusta 100A).
+    # The scanner can expose a suffix as NUMBER + SINGLE or as one MIXED token.
+    for input_prefix, output_prefix, weight in [
+        ([2, 1], [4, 5], 16),
+        ([2, 1, 1], [4, 5, 5], 16),
+        ([2, 1, 1, 1], [4, 5, 5, 5], 16),
+        ([2, 1, 1, 1, 1], [4, 5, 5, 5, 5], 16),
+        ([2, 1, 1, 1, 1, 1], [4, 5, 5, 5, 5, 5], 16),
+        ([2, 7, 1], [4, 5, 5], 16),
+        ([2, 7, 1, 1], [4, 5, 5, 5], 16),
+        ([2, 7, 1, 1, 1], [4, 5, 5, 5, 5], 16),
+        ([2, 1, 7, 1], [4, 5, 5, 5], 16),
+        ([2, 1, 7, 1, 1], [4, 5, 5, 5, 5], 16),
+        ([2, 1, 1, 7, 1], [4, 5, 5, 5, 5], 16),
+        ([2, 1, 1, 7, 1, 1], [4, 5, 5, 5, 5, 5], 16),
+        ([2, 1, 22], [4, 5, 7], 16),
+        ([2, 1, 1, 22], [4, 5, 5, 7], 16),
+        ([1], [5], 12),
+        ([1, 1], [5, 5], 12),
+        ([1, 1, 1], [5, 5, 5], 12),
+        ([1, 7, 1], [5, 5, 5], 12),
+    ]:
+        rules.append((input_prefix + [23], output_prefix + [1], 1, weight))
+        rules.append((input_prefix + [0, 18], output_prefix + [1, 1], 1, weight))
+
     # 2. [TYPE] [STREET...] [NUMBER] [UNITH] [NUMBER/WORD]
     # Ex: Rua Augusta 100 Apto 101 / Av Paulista 1000 Bloco B
     rules.append(([2, 1, 0, 19, 0], [4, 5, 1, 16, 17], 1, 16))
@@ -560,12 +585,28 @@ def generate_br_rules_sql(output_path: str):
     rules.append(([2, 1, 7, 1, 0, 19, 1], [4, 5, 5, 5, 1, 16, 17], 1, 16))
     rules.append(([2, 7, 1, 0, 19, 1], [4, 5, 5, 1, 16, 17], 1, 16))
 
+    # Lettered unit identifiers are tokenized as SINGLE (Ex: Bloco B, Apto A).
+    for input_prefix, output_prefix in [
+        ([2, 1, 0, 19], [4, 5, 1, 16]),
+        ([2, 1, 1, 0, 19], [4, 5, 5, 1, 16]),
+        ([2, 1, 1, 1, 0, 19], [4, 5, 5, 5, 1, 16]),
+        ([2, 1, 7, 1, 0, 19], [4, 5, 5, 5, 1, 16]),
+        ([2, 7, 1, 0, 19], [4, 5, 5, 1, 16]),
+    ]:
+        rules.append((input_prefix + [18], output_prefix + [17], 1, 16))
+
     # 3. [TYPE] [STREET...] [NUMBER] [UNITH] [WORD/NUMBER] [UNITH] [NUMBER]
     # Ex: Rua Augusta 100 Bloco B Apto 101
     rules.append(([2, 1, 0, 19, 1, 19, 0], [4, 5, 1, 16, 17, 16, 17], 1, 17))
     rules.append(([2, 1, 1, 0, 19, 1, 19, 0], [4, 5, 5, 1, 16, 17, 16, 17], 1, 17))
     rules.append(([2, 1, 0, 19, 0, 19, 0], [4, 5, 1, 16, 17, 16, 17], 1, 17))
     rules.append(([2, 1, 1, 0, 19, 0, 19, 0], [4, 5, 5, 1, 16, 17, 16, 17], 1, 17))
+
+    for input_prefix, output_prefix in [
+        ([2, 1, 0, 19], [4, 5, 1, 16]),
+        ([2, 1, 1, 0, 19], [4, 5, 5, 1, 16]),
+    ]:
+        rules.append((input_prefix + [18, 19, 0], output_prefix + [17, 16, 17], 1, 17))
 
     # 4. [TYPE] [STREET...] (Sem número)
     rules.append(([2, 1], [4, 5], 1, 10))
@@ -624,6 +665,8 @@ def generate_br_rules_sql(output_path: str):
     rules.append(([10, 11, 0], [10, 11, 13], 0, 17))
     rules.append(([10, 11, 0, 0], [10, 11, 13, 13], 0, 17))
     rules.append(([10, 11, 12], [10, 11, 12], 0, 17))
+    rules.append(([10, 11, 0, 12], [10, 11, 13, 12], 0, 17))
+    rules.append(([10, 11, 0, 0, 12], [10, 11, 13, 13, 12], 0, 17))
     rules.append(([10, 0], [10, 13], 0, 16))
     rules.append(([10, 12], [10, 12], 0, 16))
     rules.append(([10], [10], 0, 14))
@@ -644,11 +687,19 @@ def generate_br_rules_sql(output_path: str):
     rules.append(([1, 1, 1, 11, 0], [10, 10, 10, 11, 13], 0, 17))
     rules.append(([1, 7, 1, 11, 0], [10, 10, 10, 11, 13], 0, 17))
     rules.append(([1, 7, 1, 1, 11, 0], [10, 10, 10, 10, 11, 13], 0, 17))
+    rules.append(([1, 11, 0, 12], [10, 11, 13, 12], 0, 17))
+    rules.append(([1, 1, 11, 0, 12], [10, 10, 11, 13, 12], 0, 17))
+    rules.append(([1, 1, 1, 11, 0, 12], [10, 10, 10, 11, 13, 12], 0, 17))
+    rules.append(([1, 7, 1, 11, 0, 12], [10, 10, 10, 11, 13, 12], 0, 17))
+    rules.append(([1, 7, 1, 1, 11, 0, 12], [10, 10, 10, 10, 11, 13, 12], 0, 17))
     
     # With two-part postal (e.g. 01310 - 000 / 0 0)
     rules.append(([1, 11, 0, 0], [10, 11, 13, 13], 0, 17))
     rules.append(([1, 1, 11, 0, 0], [10, 10, 11, 13, 13], 0, 17))
     rules.append(([1, 7, 1, 11, 0, 0], [10, 10, 10, 11, 13, 13], 0, 17))
+    rules.append(([1, 11, 0, 0, 12], [10, 11, 13, 13, 12], 0, 17))
+    rules.append(([1, 1, 11, 0, 0, 12], [10, 10, 11, 13, 13, 12], 0, 17))
+    rules.append(([1, 7, 1, 11, 0, 0, 12], [10, 10, 10, 11, 13, 13, 12], 0, 17))
 
     # 4. Word-based City + State + Country
     # Ex: São Paulo SP Brasil

@@ -24,6 +24,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #include <string.h>
 #include <ctype.h>
 #include <unistd.h>
+#ifndef PAGC_STANDALONE
+#include "postgres.h"
+#include "catalog/pg_collation_d.h"
+#include "utils/formatting.h"
+#ifdef IS_DIR_SEP
+#undef IS_DIR_SEP
+#endif
+#endif
 #include "pagc_common.h"
 #include "pagc_tools.h"
 
@@ -304,12 +312,20 @@ void combine_path_file( char global_path_separator ,
 void upper_case( char *d ,
                  const char *s ) {
    /* -- make an uppercase copy in d of string in s -- */
+#ifdef PAGC_STANDALONE
    for ( ;
          *s != SENTINEL ;
          s++ ) {
-      *d++ = ( islower( *s )? toupper( *s ) : *s ) ;
+      *d++ = ( islower( (unsigned char) *s )? toupper( (unsigned char) *s ) : *s ) ;
    }
    BLANK_STRING(d) ;
+#else
+   char *upper;
+
+   upper = str_toupper(s, strlen(s), DEFAULT_COLLATION_OID);
+   strlcpy(d, upper, MAXSTRLEN);
+   pfree(upper);
+#endif
 }
 
 /* 2010-10-22 : new routine */
@@ -437,5 +453,3 @@ static void conform_directory_separator( char * path_name ) {
 }
 /* ..... END OF IFDEF MSYS_POSIX ..... */
 #endif
-
-

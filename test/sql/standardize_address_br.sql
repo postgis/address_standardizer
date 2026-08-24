@@ -4,3 +4,8 @@ SELECT '#br2' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rule
 SELECT '#br3' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rodovia dos Imigrantes, Km 50', 'Sao Paulo, SP');
 SELECT '#br4' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'SQS 308 Bloco B Apto 101', 'Brasilia, DF');
 SELECT '#br5' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Quadra 10 Lote 5', 'Goiania, GO');
+SELECT '#br6' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Açucena, 100', 'São Paulo, SP');
+SELECT '#br7' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Augusta, 100A', 'Sao Paulo, SP');
+SELECT '#br8' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Avenida Paulista, 1000 Bloco B', 'Sao Paulo, SP');
+SELECT '#br9' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Augusta, 100', 'Sao Paulo, SP, Brazil');
+SELECT '#br10' AS ticket, * FROM standardize_address('br_lex', 'br_gaz', 'br_rules', 'Rua Augusta, 100', 'Sao Paulo, SP, 01310-100, Brasil');
