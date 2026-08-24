@@ -86,3 +86,7 @@ export PGUSER="$pg_user"
 
 createdb contrib_regression
 "$MAKE" -C "$repo_root" -f Makefile installcheck
+
+createdb --template=template0 --encoding=LATIN1 --lc-collate=C --lc-ctype=C latin1_c_locale
+psql --no-psqlrc --quiet --dbname=latin1_c_locale --set=ON_ERROR_STOP=1 \
+    --file="$repo_root/test/sql/latin1_c_locale.sql"

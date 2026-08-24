@@ -74,6 +74,16 @@ static int _Is_Alphabetic_Character_(const char *character)
 		return isalpha(first_byte) ;
 	}
 #ifndef PAGC_STANDALONE
+	if (GetDatabaseEncoding() == PG_LATIN1)
+	{
+		/* Keep the Portuguese subset used by the BR data independent of
+		 * LC_CTYPE in single-byte LATIN1 databases. */
+		return (first_byte == 0xAA) || (first_byte == 0xBA) ||
+		       ((first_byte >= 0xC0) && (first_byte <= 0xD6)) ||
+		       ((first_byte >= 0xD8) && (first_byte <= 0xDE)) ||
+		       ((first_byte >= 0xE0) && (first_byte <= 0xF6)) ||
+		       ((first_byte >= 0xF8) && (first_byte <= 0xFE)) ;
+	}
 	if (GetDatabaseEncoding() == PG_UTF8)
 	{
 		int length = pg_utf_mblen((const unsigned char *) character) ;
@@ -402,16 +412,24 @@ static char * _Scan_Next_( STAND_PARAM *__stand_param__,char * __in_ptr__)
 		RETURN_NEW_MORPH(DSINGLE) ;
 	}
 	/*-- <remarks> Alphabetic sequence </remarks> --*/
-	if (_Is_Alphabetic_Character_(__src__) || (a == '\'') || (a == '#'))
+	if (a == '#')
+	{
+		ENSURE_SCAN_ROOM(1) ;
+		*__dest__++ = a ;
+		__src__++ ;
+		TERM_AND_LENGTH ;
+		RETURN_NEW_MORPH(DSINGLE) ;
+	}
+	if (_Is_Alphabetic_Character_(__src__) || (a == '\''))
 	{
 		int character_count = 0 ;
 
 		while (_Is_Alphabetic_Character_(__src__) ||
 		       _Is_Combining_Mark_(__src__) ||
-		       (*__src__ == '\'') || (*__src__ == '#'))
+		       (*__src__ == '\''))
 		{
 			int is_combining_mark = _Is_Combining_Mark_(__src__) ;
-			int character_length = ((*__src__ == '\'') || (*__src__ == '#')) ? 1 :
+			int character_length = (*__src__ == '\'') ? 1 :
 			                       _Character_Length_(__src__) ;
 
 			ENSURE_SCAN_ROOM(character_length) ;

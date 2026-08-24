@@ -78,6 +78,13 @@ SELECT '#hash_unit' AS ticket, house_num, name, suftype, unit FROM standardize_a
  #hash_unit | 123       | MAIN | STREET  | # 4
 (1 row)
 
+SELECT '#hash_unit_attached' AS ticket, house_num, name, suftype, unit FROM standardize_address(
+    'us_lex', 'us_gaz', 'us_rules', '123 Main St#4', 'Boston, MA');
+       ticket        | house_num | name | suftype | unit 
+---------------------+-----------+------+---------+------
+ #hash_unit_attached | 123       | MAIN | STREET  | # 4
+(1 row)
+
 SELECT '#unit_order' AS ticket, house_num, name, suftype, unit FROM standardize_address(
     'us_lex', 'us_gaz', 'us_rules', '123 Main St Rear Apt 2', 'Boston, MA');
    ticket    | house_num | name | suftype |       unit       

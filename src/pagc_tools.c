@@ -343,6 +343,10 @@ void upper_case( char *d ,
       nfc = palloc(nfc_capacity) ;
       nfc_length = pg_wchar2mb_with_len(normalized, nfc, normalized_length) ;
       nfc[nfc_length] = SENTINEL ;
+      if (nfc_length >= MAXSTRLEN) {
+         ereport(ERROR,
+                 (errmsg("normalized token exceeds maximum length"))) ;
+      }
       s = nfc ;
       while ((*s != SENTINEL) && (d < end)) {
          unsigned char first = (unsigned char) s[0] ;
@@ -380,10 +384,31 @@ void upper_case( char *d ,
       pfree(normalized) ;
       pfree(wide) ;
    }
+   else if (GetDatabaseEncoding() == PG_LATIN1) {
+      char *end = d + MAXSTRLEN - 1 ;
+
+      while ((*s != SENTINEL) && (d < end)) {
+         unsigned char byte = (unsigned char) *s++ ;
+
+         if ((byte >= 'a') && (byte <= 'z')) {
+            byte -= 'a' - 'A' ;
+         }
+         else if ((((byte >= 0xE0) && (byte <= 0xF6)) && (byte != 0xF7)) ||
+                  ((byte >= 0xF8) && (byte <= 0xFE))) {
+            byte -= 0x20 ;
+         }
+         *d++ = (char) byte ;
+      }
+      BLANK_STRING(d) ;
+   }
    else {
       char *upper;
 
       upper = str_toupper(s, strlen(s), DEFAULT_COLLATION_OID);
+      if (strlen(upper) >= MAXSTRLEN) {
+         ereport(ERROR,
+                 (errmsg("uppercased token exceeds maximum length"))) ;
+      }
       strlcpy(d, upper, MAXSTRLEN);
       pfree(upper);
    }
