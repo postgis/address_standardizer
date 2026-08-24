@@ -18,4 +18,3 @@ test/results/*.diff
 .pgdata/
 downloads_cnefe/
 *.zip
-

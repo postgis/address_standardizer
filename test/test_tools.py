@@ -111,7 +111,7 @@ class TestImportCnefe(unittest.TestCase):
             with patch("subprocess.run") as mock_run, \
                  patch("subprocess.Popen", return_value=mock_proc), \
                  patch("import_cnefe.get_municipality_map", return_value={3550308: ("SAO PAULO", "SP")}):
-                
+
                 mock_run.return_value = MagicMock(stdout="0\n")
                 import_cnefe.import_cnefe_to_postgres(zip_path, "SP")
 
@@ -246,7 +246,7 @@ class TestImportCnefe(unittest.TestCase):
         """Verify parsing of single UF, multiple comma-separated UFs, and BR/ALL."""
         self.assertEqual(import_cnefe.get_target_ufs("SP"), ["SP"])
         self.assertEqual(import_cnefe.get_target_ufs("sp, rj, mg"), ["SP", "RJ", "MG"])
-        
+
         all_ufs = import_cnefe.get_target_ufs("BR")
         self.assertEqual(len(all_ufs), 27)
         self.assertIn("SP", all_ufs)

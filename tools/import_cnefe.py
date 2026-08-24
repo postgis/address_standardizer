@@ -306,7 +306,7 @@ def import_cnefe_to_postgres(
             if not csv_filename:
                 raise FileNotFoundError(f"Nenhum arquivo CSV encontrado dentro do arquivo ZIP: {zip_path}")
             print(f"Arquivo CSV interno: {csv_filename}")
-            
+
             copy_sql = (
                 f"COPY {stage_table} (cod_municipio_ibge, municipio, uf, tipo, titulo, logradouro, "
                 "numero, modificador, bairro, cep, latitude, longitude) FROM STDIN "
@@ -386,7 +386,7 @@ def import_cnefe_to_postgres(
                 except OSError:
                     pass
                 raise
-            
+
             elapsed = time.time() - start_time
             print(f"\n✅ Total inserido em staging ({stage_table}): {count:,} registros em {elapsed:.1f}s.")
 

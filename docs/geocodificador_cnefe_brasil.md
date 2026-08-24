@@ -11,13 +11,13 @@ O sistema de geocodificação é dividido em duas etapas complementares:
 ```mermaid
 flowchart TD
     Raw["1. Texto do Usuário\n'r. augusta 100 ap 12, sao paulo, sp'"] --> Parser["2. address_standardizer\n(Gramática, Dicionários, Regras BR)"]
-    
+
     Parser --> Clean["3. Endereço Estruturado\npretype='RUA'\nname='AUGUSTA'\nhouse_num='100'\nunit='APTO 12'\ncity='SAO PAULO'\nstate='SP'"]
-    
+
     Clean --> Search["4. Consulta SQL com Índices\n(Busca Exata + Fuzzy pg_trgm)"]
-    
+
     DB[("5. Base CNEFE (IBGE)\n111M+ de endereços\n(coordenadas quando disponíveis)")] --> Search
-    
+
     Search --> Result["6. Resultado Georreferenciado\nCEP: 01304-000\nLatitude / Longitude (se disponíveis)\nGeometria: Point(4326)"]
 ```
 
@@ -57,20 +57,20 @@ CREATE TABLE IF NOT EXISTS cnefe_enderecos (
 
 
 -- 3. Índices de busca rápida (B-tree e Espacial GiST)
-CREATE INDEX IF NOT EXISTS idx_cnefe_lookup 
+CREATE INDEX IF NOT EXISTS idx_cnefe_lookup
     ON cnefe_enderecos (uf, municipio, logradouro, numero);
 
-CREATE INDEX IF NOT EXISTS idx_cnefe_cep 
+CREATE INDEX IF NOT EXISTS idx_cnefe_cep
     ON cnefe_enderecos (cep);
 
-CREATE INDEX IF NOT EXISTS idx_cnefe_geom 
+CREATE INDEX IF NOT EXISTS idx_cnefe_geom
     ON cnefe_enderecos USING GIST (geom);
 
-CREATE INDEX IF NOT EXISTS idx_cnefe_geog 
+CREATE INDEX IF NOT EXISTS idx_cnefe_geog
     ON cnefe_enderecos USING GIST ((geom::geography));
 
 -- 4. Índice para busca fonética / tolerância a erros de digitação (Fuzzy Search)
-CREATE INDEX IF NOT EXISTS idx_cnefe_logr_trgm 
+CREATE INDEX IF NOT EXISTS idx_cnefe_logr_trgm
     ON cnefe_enderecos USING GIN (logradouro gin_trgm_ops);
 ```
 
@@ -90,7 +90,7 @@ WITH parsed AS (
         'Sao Paulo, SP'
     )
 )
-SELECT 
+SELECT
     c.id,
     c.tipo,
     c.logradouro,
@@ -125,7 +125,7 @@ WITH parsed AS (
         'Sao Paulo, SP'
     )
 )
-SELECT 
+SELECT
     c.id,
     c.tipo,
     c.logradouro,
@@ -151,7 +151,7 @@ LIMIT 5;
 Encontrar o endereço e CEP mais próximos de um ponto no mapa (ex: GPS do motorista):
 
 ```sql
-SELECT 
+SELECT
     CONCAT_WS(' ', c.tipo, c.titulo, c.logradouro) || COALESCE(', ' || NULLIF(c.numero, '0'), '') AS endereco,
     c.bairro,
     c.municipio,
