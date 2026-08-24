@@ -27,10 +27,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #ifndef PAGC_STANDALONE
 #include "postgres.h"
 #include "catalog/pg_collation_d.h"
+#include "common/unicode_norm.h"
+#include "mb/pg_wchar.h"
 #include "utils/formatting.h"
-#ifdef IS_DIR_SEP
-#undef IS_DIR_SEP
-#endif
 #endif
 #include "pagc_common.h"
 #include "pagc_tools.h"
@@ -320,11 +319,65 @@ void upper_case( char *d ,
    }
    BLANK_STRING(d) ;
 #else
-   char *upper;
+   if (GetDatabaseEncoding() == PG_UTF8) {
+      char *end = d + MAXSTRLEN - 1 ;
+      int source_length = strlen(s) ;
+      pg_wchar *wide = palloc((source_length + 1) * sizeof(pg_wchar)) ;
+      pg_wchar *normalized ;
+      char *nfc = palloc(source_length + 1) ;
+      int wide_length ;
 
-   upper = str_toupper(s, strlen(s), DEFAULT_COLLATION_OID);
-   strlcpy(d, upper, MAXSTRLEN);
-   pfree(upper);
+      /* The BR generator uses Python's locale-independent upper().  Keep the
+       * corresponding ASCII and Portuguese Latin-1 mappings independent of
+       * the database LC_CTYPE so UTF-8 data also works in C-locale databases. */
+      wide_length = pg_mb2wchar_with_len(s, wide, source_length) ;
+      wide[wide_length] = 0 ;
+      normalized = unicode_normalize(UNICODE_NFC, wide) ;
+      pg_wchar2mb(normalized, nfc) ;
+      s = nfc ;
+      while ((*s != SENTINEL) && (d < end)) {
+         unsigned char first = (unsigned char) s[0] ;
+
+         if ((first >= 'a') && (first <= 'z')) {
+            *d++ = (char) (first - ('a' - 'A')) ;
+            s++ ;
+         }
+         else if ((first == 0xC3) && (s[1] != SENTINEL) &&
+                  ((((unsigned char) s[1] >= 0xA0) &&
+                    ((unsigned char) s[1] <= 0xB6) &&
+                    ((unsigned char) s[1] != 0xB7)) ||
+                   (((unsigned char) s[1] >= 0xB8) &&
+                    ((unsigned char) s[1] <= 0xBE)))) {
+            if (d + 1 >= end) {
+               break ;
+            }
+            *d++ = (char) 0xC3 ;
+            *d++ = (char) ((unsigned char) s[1] - 0x20) ;
+            s += 2 ;
+         }
+         else {
+            int character_length = pg_mblen_unbounded(s) ;
+
+            if (d + character_length > end) {
+               break ;
+            }
+            memcpy(d, s, character_length) ;
+            d += character_length ;
+            s += character_length ;
+         }
+      }
+      BLANK_STRING(d) ;
+      pfree(nfc) ;
+      pfree(normalized) ;
+      pfree(wide) ;
+   }
+   else {
+      char *upper;
+
+      upper = str_toupper(s, strlen(s), DEFAULT_COLLATION_OID);
+      strlcpy(d, upper, MAXSTRLEN);
+      pfree(upper);
+   }
 #endif
 }
 

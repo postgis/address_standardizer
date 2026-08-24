@@ -10,6 +10,10 @@ SELECT '#5299b' AS ticket, * FROM standardize_address('us_lex',  'us_gaz', 'us_r
 SELECT '#5695a' AS ticket, * FROM standardize_address('us_lex', 'us_gaz', 'us_rules', 'ONE E PIMA ST STE 999, TUCSON, AZ');
 SELECT '#2459a' AS ticket, * FROM standardize_address('us_lex', 'us_gaz', 'us_rules', '26 Court Street, Boston, Massachusetts 02109, France');
 SELECT '#2459b' AS ticket, * FROM standardize_address('us_lex', 'us_gaz', 'us_rules', '212 3rd Ave N, MINNEAPOLIS, MN 553404');
+SET statement_timeout = '2s';
+SELECT '#hash_unit' AS ticket, house_num, name, suftype, unit FROM standardize_address(
+    'us_lex', 'us_gaz', 'us_rules', '123 Main St #4', 'Boston, MA');
+RESET statement_timeout;
 DO $$
 BEGIN
 	PERFORM standardize_address('us_lex', 'us_gaz', 'us_rules', '   ');

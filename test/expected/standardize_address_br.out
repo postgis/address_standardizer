@@ -112,5 +112,11 @@ SELECT '#br20' AS ticket, house_num, pretype, name FROM standardize_address('br_
 ticket|house_num|pretype|name
 #br20|100|RUA|AÇUCENA
 (1 row)
+SELECT '#br21' AS ticket, house_num, pretype, name, city FROM standardize_address(
+    'br_lex', 'br_gaz', 'br_rules',
+    U&'Rua Ac\0327ucena 100', U&'Sa\0303o Paulo, SP');
+ticket|house_num|pretype|name|city
+#br21|100|RUA|AÇUCENA|SAO PAULO
+(1 row)
 \pset format aligned
 -- End Brazilian address standardizer regression tests

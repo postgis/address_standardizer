@@ -70,6 +70,15 @@ SELECT '#2459b' AS ticket, * FROM standardize_address('us_lex', 'us_gaz', 'us_ru
  #2459b |          | 212       |        |      |         | 3    | AVENUE  | NORTH  |            |       | MINNEAPOLIS | MINNESOTA | US      | 55340-4  |     | 
 (1 row)
 
+SET statement_timeout = '2s';
+SELECT '#hash_unit' AS ticket, house_num, name, suftype, unit FROM standardize_address(
+    'us_lex', 'us_gaz', 'us_rules', '123 Main St #4', 'Boston, MA');
+   ticket   | house_num | name | suftype | unit 
+------------+-----------+------+---------+------
+ #hash_unit | 123       | MAIN | STREET  | # 4
+(1 row)
+
+RESET statement_timeout;
 DO $$
 BEGIN
 	PERFORM standardize_address('us_lex', 'us_gaz', 'us_rules', '   ');

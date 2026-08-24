@@ -117,3 +117,4 @@ END
 $$;
 
 SELECT 'security_bounds_ok';
+-- End of security bounds regression.

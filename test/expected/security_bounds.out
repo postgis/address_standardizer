@@ -121,3 +121,4 @@ SELECT 'security_bounds_ok';
  security_bounds_ok
 (1 row)
 
+-- End of security bounds regression.

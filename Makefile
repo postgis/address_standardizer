@@ -97,7 +97,7 @@ data/$(DATA_EXTENSION_BR)--ANY--$(AS_VERSION).sql: data/$(DATA_EXTENSION_BR)_cor
 	cat $^ > $@
 
 
-.PHONY: dist check test-rules-api test-br-data-generator
+.PHONY: dist check installcheck test-rules-api test-br-data-generator
 dist:
 	git archive --prefix=$(DISTNAME)/ HEAD | gzip > $(DISTARCHIVE)
 

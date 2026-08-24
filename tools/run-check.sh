@@ -64,7 +64,7 @@ trap cleanup EXIT HUP INT TERM
 
 "$MAKE" -C "$repo_root" -f Makefile install DESTDIR="$install_root"
 
-"$pg_bindir/initdb" -D "$pgdata" --auth=trust --no-instructions >/dev/null
+"$pg_bindir/initdb" -D "$pgdata" --locale=C --encoding=UTF8 --auth=trust --no-instructions >/dev/null
 
 cat >> "$pgdata/postgresql.auto.conf" <<EOF
 listen_addresses = ''

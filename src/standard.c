@@ -74,8 +74,29 @@ static int _Is_Alphabetic_Character_(const char *character)
 		return isalpha(first_byte) ;
 	}
 #ifndef PAGC_STANDALONE
+	if (GetDatabaseEncoding() == PG_UTF8)
+	{
+		int length = pg_utf_mblen((const unsigned char *) character) ;
+		pg_wchar codepoint ;
+
+		if (!pg_utf8_islegal((const unsigned char *) character, length))
+		{
+			return FALSE ;
+		}
+		codepoint = utf8_to_unicode((const unsigned char *) character) ;
+		/* PostgreSQL 14 has no locale-independent Unicode category API.
+		 * Recognize the Latin ranges used by the BR data before consulting
+		 * LC_CTYPE, so Portuguese input works even in a C-locale database. */
+		if (((codepoint >= 0x00C0) && (codepoint <= 0x00D6)) ||
+		    ((codepoint >= 0x00D8) && (codepoint <= 0x00DE)) ||
+		    ((codepoint >= 0x00E0) && (codepoint <= 0x00F6)) ||
+		    ((codepoint >= 0x00F8) && (codepoint <= 0x00FE)))
+		{
+			return TRUE ;
+		}
+	}
 	/* PostgreSQL classifies a complete character in the database encoding and
-	 * locale; testing each UTF-8 byte would also accept punctuation bytes. */
+	 * locale for scripts not covered by the portable Latin fast path. */
 	return t_isalpha_unbounded(character) ;
 #else
 	{
@@ -89,6 +110,52 @@ static int _Is_Alphabetic_Character_(const char *character)
 		       (length != 0) && iswalpha(wide_character) ;
 	}
 #endif
+}
+
+static int _Is_Combining_Mark_(const char *character)
+{
+	unsigned char first_byte = (unsigned char) *character ;
+	unsigned int codepoint ;
+
+	if (first_byte < 0x80)
+	{
+		return FALSE ;
+	}
+#ifndef PAGC_STANDALONE
+	if (GetDatabaseEncoding() != PG_UTF8)
+	{
+		return FALSE ;
+	}
+	{
+		int length = pg_utf_mblen((const unsigned char *) character) ;
+
+		if (!pg_utf8_islegal((const unsigned char *) character, length))
+		{
+			return FALSE ;
+		}
+	}
+	codepoint = utf8_to_unicode((const unsigned char *) character) ;
+#else
+	{
+		mbstate_t state ;
+		size_t length ;
+		wchar_t wide_character ;
+
+		memset(&state, 0, sizeof(state)) ;
+		length = mbrtowc(&wide_character, character, MB_CUR_MAX, &state) ;
+		if ((length == (size_t) -1) || (length == (size_t) -2) ||
+		    (length == 0))
+		{
+			return FALSE ;
+		}
+		codepoint = (unsigned int) wide_character ;
+	}
+#endif
+	return ((codepoint >= 0x0300) && (codepoint <= 0x036F)) ||
+	       ((codepoint >= 0x1AB0) && (codepoint <= 0x1AFF)) ||
+	       ((codepoint >= 0x1DC0) && (codepoint <= 0x1DFF)) ||
+	       ((codepoint >= 0x20D0) && (codepoint <= 0x20FF)) ||
+	       ((codepoint >= 0xFE20) && (codepoint <= 0xFE2F)) ;
 }
 
 static char __spacer__[] = " \\-.)}>_" ;
@@ -338,16 +405,22 @@ static char * _Scan_Next_( STAND_PARAM *__stand_param__,char * __in_ptr__)
 	{
 		int character_count = 0 ;
 
-		while (_Is_Alphabetic_Character_(__src__) || (*__src__ == '\''))
+		while (_Is_Alphabetic_Character_(__src__) ||
+		       _Is_Combining_Mark_(__src__) ||
+		       (*__src__ == '\'') || (*__src__ == '#'))
 		{
-			int character_length = (*__src__ == '\'') ? 1 :
+			int is_combining_mark = _Is_Combining_Mark_(__src__) ;
+			int character_length = ((*__src__ == '\'') || (*__src__ == '#')) ? 1 :
 			                       _Character_Length_(__src__) ;
 
 			ENSURE_SCAN_ROOM(character_length) ;
 			memcpy(__dest__, __src__, character_length) ;
 			__dest__ += character_length ;
 			__src__ += character_length ;
-			character_count++ ;
+			if (!is_combining_mark)
+			{
+				character_count++ ;
+			}
 		}
 		TERM_AND_LENGTH ;
 		/*-- <remarks> Retain position </remarks> --*/
