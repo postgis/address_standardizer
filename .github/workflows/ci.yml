@@ -37,3 +37,6 @@ jobs:
 
     - name: 'Test'
       run: PGUSER=postgres make installcheck installcheck-latin1 || (cat regression.diffs && false)
+
+    - name: 'Test BR data generate'
+      run: PGUSER=postgres make test-br-data-generator

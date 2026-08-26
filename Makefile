@@ -123,10 +123,10 @@ endif
 test/rules_api_test: test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_tools.c src/standard.c src/tokenize.c src/lexicon.c src/hash.c src/analyze.c src/export.c src/pagc_api.h src/pagc_std_api.h src/gamma.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(PG_CPPFLAGS) -DPAGC_STANDALONE -ffunction-sections -Isrc -I$(shell $(PG_CONFIG) --includedir-server) -o $@ test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_tools.c src/standard.c src/tokenize.c src/lexicon.c src/hash.c src/analyze.c src/export.c -Wl,--gc-sections -L$(shell $(PG_CONFIG) --pkglibdir) -lpgcommon -lpgport $(RULES_API_TEST_LIBS)
 
-installcheck: test-rules-api test-br-data-generator
+installcheck: test-rules-api
 
 installcheck-latin1:
 	sh tools/run-latin1-check.sh
 
-check: test-rules-api test-br-data-generator
+check: test-rules-api
 	PG_CONFIG="$(PG_CONFIG)" MAKE="$(MAKE)" sh tools/run-check.sh
