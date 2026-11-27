@@ -11,6 +11,9 @@
 
 ### Bug Fixes
 
+- Reject addresses with too many morphemes before writing beyond the
+  scanner array (reported by Zachariah Mithani, AploSec;
+  fixed by Darafei Praliaskouski)
 - Reject oversized rule strings before parsing can overrun the
   `address_standardizer` rule buffer
   (reported by Sarath Kumar, IITM Pravartak Security Team;
