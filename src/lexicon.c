@@ -82,6 +82,8 @@ LEXICON *lex_init( ERR_PARAM *err_p )
 
 int lex_add_entry(LEXICON *lex, int seq, char *word, char *stdword, SYMB token)
 {
+	if (!is_input_symbol(token))
+		return FALSE;
     return add_dict_entry( lex->err_p, lex->hash_table, word, seq-1, token, stdword);
 }
 

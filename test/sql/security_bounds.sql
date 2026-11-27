@@ -23,6 +23,17 @@ CREATE TEMP TABLE scanner_rules (
 
 INSERT INTO scanner_rules VALUES (1, '0 1 -1 1 5 -1 1 7');
 
+-- A caller may supply its own temporary lexicon. Reject an input token equal
+-- to the allocated gamma row count before it can index the transducer.
+INSERT INTO scanner_lex VALUES (2, 1, 'ST', 'STREET', 2147483647);
+DO $lexicon_token_bounds$
+BEGIN
+	PERFORM standardize_address(
+		'scanner_lex', 'scanner_gaz', 'scanner_rules', '1 ST', '');
+END
+$lexicon_token_bounds$;
+DELETE FROM scanner_lex WHERE id = 2;
+
 DO $scanner_bounds$
 DECLARE
 	standardized stdaddr;

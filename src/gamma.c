@@ -96,7 +96,7 @@ called by gamma.c (create_rules)
 ----------------------------------------------------------------------------*/
 int is_input_symbol( SYMB sym ) {
 
-   if ( sym > MAXINSYM ||
+   if ( sym >= MAXINSYM ||
         sym < 0 )
       return FALSE ;
    return TRUE ;
