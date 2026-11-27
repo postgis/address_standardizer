@@ -81,6 +81,7 @@ int
 main(void)
 {
 	ERR_PARAM err_p;
+	LEXICON *lex;
 	int valid_extra[] = {1, -1, 5, -1, 4, 0};
 	int valid_perfect_weight[] = {1, -1, 5, -1, 4, PERFECT};
 	int invalid_high[] = {1, -1, 5, -1, MAX_CL, 0};
@@ -109,6 +110,27 @@ main(void)
 	               invalid_weight_low,
 	               sizeof(invalid_weight_low) / sizeof(invalid_weight_low[0])))
 		return 1;
+	if (is_input_symbol(MAXINSYM) || !is_input_symbol(MAXINSYM - 1))
+	{
+		fprintf(stderr, "input symbol bounds are incorrect\n");
+		return 1;
+	}
+	memset(&err_p, 0, sizeof(err_p));
+	{
+		char error_buf[MAXSTRLEN];
+		memset(error_buf, 0, sizeof(error_buf));
+		err_p.error_buf = error_buf;
+		lex = lex_init(&err_p);
+		if (!lex)
+			return 1;
+		if (lex_add_entry(lex, 1, "bad-token", "bad-token", MAXINSYM) != FALSE)
+		{
+			fprintf(stderr, "lex_add_entry accepted an out-of-range token\n");
+			lex_free(lex);
+			return 1;
+		}
+		lex_free(lex);
+	}
 	if (check_maxnode_cleanup(&err_p))
 		return 1;
 

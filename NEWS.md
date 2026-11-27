@@ -11,6 +11,8 @@
 
 ### Bug Fixes
 
+- Reject out-of-range lexicon tokens before transducer lookup
+  (reported by Dickson Wu; fixed by Darafei Praliaskouski)
 - Reject oversized rule strings before parsing can overrun the
   `address_standardizer` rule buffer
   (reported by Sarath Kumar, IITM Pravartak Security Team;
