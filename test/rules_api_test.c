@@ -77,6 +77,34 @@ check_maxnode_cleanup(ERR_PARAM *err_p)
 	return 0;
 }
 
+static int
+check_morph_array_bound(ERR_PARAM *err_p)
+{
+	struct stand_with_canary
+	{
+		STAND_PARAM stand;
+		int canary;
+	} guarded;
+	int rc;
+
+	memset(&guarded, 0, sizeof(guarded));
+	memset(err_p, 0, sizeof(*err_p));
+	err_p->error_buf = err_p->err_array[0].content_buf;
+	err_p->next_fatal = FALSE;
+	guarded.stand.cur_morph = MAXMORPHS;
+	guarded.stand.errors = err_p;
+	guarded.canary = 123456;
+
+	rc = new_morph(&guarded.stand, WORD, "X", 1);
+	if (rc != FALSE || guarded.canary != 123456)
+	{
+		fprintf(stderr, "morpheme array bound: rejected=%d sentinel=%d\n",
+		        rc == FALSE, guarded.canary);
+		return 1;
+	}
+	return 0;
+}
+
 int
 main(void)
 {
@@ -110,6 +138,8 @@ main(void)
 	               sizeof(invalid_weight_low) / sizeof(invalid_weight_low[0])))
 		return 1;
 	if (check_maxnode_cleanup(&err_p))
+		return 1;
+	if (check_morph_array_bound(&err_p))
 		return 1;
 
 	return 0;

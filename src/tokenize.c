@@ -173,6 +173,14 @@ int new_morph( STAND_PARAM *s_p ,
    i = s_p -> cur_morph ;
    j = s_p -> base_morph ;
 
+   /* next_morph() runs after writing, so protect the array at its boundary. */
+   if ( i < 0 || i >= MAXMORPHS ) {
+      CLIENT_ERR( s_p -> errors ) ;
+      RET_ERR( "next_morph: Too many morphemes in input",
+               s_p->errors,
+               FALSE) ;
+   }
+
    if ( length >= MAXTEXT ) {
       CLIENT_ERR( s_p -> errors ) ;
       RET_ERR1( "new_morph: %s is way too long",
