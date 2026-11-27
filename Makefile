@@ -94,8 +94,8 @@ include $(PGXS)
 test-rules-api: test/rules_api_test
 	./test/rules_api_test
 
-test/rules_api_test: test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_tools.c src/pagc_api.h src/pagc_std_api.h src/gamma.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(PG_CPPFLAGS) -ffunction-sections -Isrc -I$(shell $(PG_CONFIG) --includedir-server) -o $@ test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_tools.c -Wl,--gc-sections -L$(shell $(PG_CONFIG) --pkglibdir) -lpgcommon -lpgport
+test/rules_api_test: test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_tools.c src/tokenize.c src/lexicon.c src/hash.c src/pagc_api.h src/pagc_std_api.h src/gamma.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(PG_CPPFLAGS) -ffunction-sections -Isrc -I$(shell $(PG_CONFIG) --includedir-server) -o $@ test/rules_api_test.c src/gamma.c src/err_param.c src/pagc_tools.c src/tokenize.c src/lexicon.c src/hash.c -Wl,--gc-sections -L$(shell $(PG_CONFIG) --pkglibdir) -lpgcommon -lpgport
 
 installcheck: test-rules-api
 
